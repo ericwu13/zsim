@@ -1106,7 +1106,9 @@ VOID SimEnd() {
         //Done to preserve the scheduler and contention simulation internal threads
         if (zinfo->globalActiveProcs) {
             info("Delaying termination until all other processes finish");
-            while (zinfo->globalActiveProcs) usleep(100*1000);
+            info ("Never mind, waiting grace period and then terminating");
+            //while (zinfo->globalActiveProcs) usleep(100*1000);
+            usleep(5*1000*1000);
             info("All other processes done, terminating");
         }
 
