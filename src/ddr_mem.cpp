@@ -235,6 +235,7 @@ void DDRMemory::initStats(AggregateStat* parentStat) {
     profReadHits.init("rdhits", "Read row hits"); memStats->append(&profReadHits);
     profWriteHits.init("wrhits", "Write row hits"); memStats->append(&profWriteHits);
     latencyHist.init("mlh", "latency histogram for memory requests", NUMBINS); memStats->append(&latencyHist);
+    wrLatencyHist.init("mlhwr", "Latency histogram for memory write requests", NUMBINS); memStats->append(&wrLatencyHist);
     parentStat->append(memStats);
 }
 
@@ -619,6 +620,8 @@ uint64_t DDRMemory::trySchedule(uint64_t curCycle, uint64_t sysCycle) {
         uint32_t scDelay = memToSysCycle(minRespCycle) + controllerSysLatency - r->startSysCycle;
         profWrites.inc();
         profTotalWrLat.inc(scDelay);
+        uint32_t bucket = std::min(NUMBINS-1, scDelay/BINSIZE);
+        wrLatencyHist.inc(bucket, 1);
         if (rowHit) profWriteHits.inc();
     }
 

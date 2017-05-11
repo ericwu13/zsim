@@ -252,7 +252,9 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
 
     //Latency
     uint32_t latency = config.get<uint32_t>(prefix + "latency", 10);
+    uint32_t wrLatency = config.get<uint32_t>(prefix + "wrLatency", latency);
     uint32_t accLat = (isTerminal)? 0 : latency; //terminal caches has no access latency b/c it is assumed accLat is hidden by the pipeline
+    uint32_t accWrLat = (isTerminal)? 0 : wrLatency;
     uint32_t invLat = latency;
 
     // Inclusion?
@@ -270,7 +272,7 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     rp->setCC(cc);
     if (!isTerminal) {
         if (type == "Simple") {
-            cache = new Cache(numLines, cc, array, rp, accLat, invLat, name);
+            cache = new Cache(numLines, cc, array, rp, accLat, accWrLat, invLat, name);
         } else if (type == "Timing") {
             uint32_t mshrs = config.get<uint32_t>(prefix + "mshrs", 16);
             uint32_t tagLat = config.get<uint32_t>(prefix + "tagLat", 5);
@@ -340,8 +342,9 @@ MemObject* BuildMemoryController(Config& config, uint32_t lineSize, uint32_t fre
 
         // Peak bandwidth (in MB/s)
         uint32_t bandwidth = config.get<uint32_t>("sys.mem.bandwidth", 6400);
+        uint32_t wrLatency = config.get<uint32_t>("sys.mem.wrLatency", 100);
 
-        mem = new MD1Memory(lineSize, frequency, bandwidth, latency, name);
+        mem = new MD1Memory(lineSize, frequency, bandwidth, latency, wrLatency, name);
     } else if (type == "WeaveMD1") {
         uint32_t bandwidth = config.get<uint32_t>("sys.mem.bandwidth", 6400);
         uint32_t boundLatency = config.get<uint32_t>("sys.mem.boundLatency", latency);
@@ -509,6 +512,8 @@ static void InitSystem(Config& config) {
         mems[i] = BuildMemoryController(config, zinfo->lineSize, zinfo->freqMHz, domain, name);
     }
 
+    // TODO - M. Sabry's HMC and Mono code would go here
+
     if (memControllers > 1) {
         bool splitAddrs = config.get<bool>("sys.mem.splitAddrs", true);
         if (splitAddrs) {
@@ -520,6 +525,8 @@ static void InitSystem(Config& config) {
 
     //Connect everything
     bool printHierarchy = config.get<bool>("sim.printHierarchy", false);
+
+    // TODO - M. Sabry's HMC and Mono code would also go here
 
     // mem to llc is a bit special, only one llc
     uint32_t childId = 0;
