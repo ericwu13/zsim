@@ -238,6 +238,7 @@ class DDRMemory : public MemObject {
         Counter profTotalRdLat, profTotalWrLat;
         Counter profReadHits, profWriteHits;  // row buffer hits
         VectorCounter latencyHist;
+        VectorCounter wrLatencyHist;
         static const uint32_t BINSIZE = 10, NUMBINS = 100;
         PAD();
 
