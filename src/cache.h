@@ -51,12 +51,13 @@ class Cache : public BaseCache {
 
         //Latencies
         uint32_t accLat; //latency of a normal access (could split in get/put, probably not needed)
+        uint32_t accWrLat;
         uint32_t invLat; //latency of an invalidation
 
         g_string name;
 
     public:
-        Cache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, const g_string& _name);
+        Cache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accWrLat, uint32_t _invLat, const g_string& _name);
 
         const char* getName();
         void setParents(uint32_t _childId, const g_vector<MemObject*>& parents, Network* network);

@@ -56,6 +56,8 @@ class MD1Memory : public MemObject {
         double smoothedPhaseAccesses;
         uint32_t zeroLoadLatency;
         uint32_t curLatency;
+        uint32_t zeroLoadWrLatency;
+        uint32_t curWrLatency;
 
         PAD();
 
@@ -73,7 +75,7 @@ class MD1Memory : public MemObject {
         PAD();
 
     public:
-        MD1Memory(uint32_t lineSize, uint32_t megacyclesPerSecond, uint32_t megabytesPerSecond, uint32_t _zeroLoadLatency, g_string& _name);
+        MD1Memory(uint32_t lineSize, uint32_t megacyclesPerSecond, uint32_t megabytesPerSecond, uint32_t _zeroLoadLatency, uint32_t _zeroLoadWrLatency, g_string& _name);
 
         void initStats(AggregateStat* parentStat) {
             AggregateStat* memStats = new AggregateStat();

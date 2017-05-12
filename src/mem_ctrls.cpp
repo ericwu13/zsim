@@ -60,7 +60,7 @@ uint64_t SimpleMemory::access(MemReq& req) {
 
 
 
-MD1Memory::MD1Memory(uint32_t requestSize, uint32_t megacyclesPerSecond, uint32_t megabytesPerSecond, uint32_t _zeroLoadLatency, g_string& _name)
+MD1Memory::MD1Memory(uint32_t requestSize, uint32_t megacyclesPerSecond, uint32_t megabytesPerSecond, uint32_t _zeroLoadLatency, uint32_t _zeroLoadWrLatency, g_string& _name)
     : zeroLoadLatency(_zeroLoadLatency), name(_name)
 {
     lastPhase = 0;
@@ -70,10 +70,12 @@ MD1Memory::MD1Memory(uint32_t requestSize, uint32_t megacyclesPerSecond, uint32_
     assert(maxRequestsPerCycle > 0.0);
 
     zeroLoadLatency = _zeroLoadLatency;
+    zeroLoadWrLatency = _zeroLoadWrLatency;
 
     smoothedPhaseAccesses = 0.0;
     curPhaseAccesses = 0;
     curLatency = zeroLoadLatency;
+    curWrLatency = zeroLoadWrLatency;
 
     futex_init(&updateLock);
 }
@@ -95,6 +97,7 @@ void MD1Memory::updateLatency() {
 
     double latMultiplier = 1.0 + 0.5*load/(1.0 - load); //See Pollancek-Khinchine formula
     curLatency = (uint32_t)(latMultiplier*zeroLoadLatency);
+    curWrLatency = (uint32_t)(latMultiplier*zeroLoadWrLatency);
 
     //info("%s: Load %.2f, latency multiplier %.2f, latency %d", name.c_str(), load, latMultiplier, curLatency);
     uint32_t intLoad = (uint32_t)(load*100.0);
@@ -120,7 +123,7 @@ uint64_t MD1Memory::access(MemReq& req) {
         case PUTX:
             //Dirty wback
             profWrites.atomicInc();
-            profTotalWrLat.atomicInc(curLatency);
+            profTotalWrLat.atomicInc(curWrLatency);
             __sync_fetch_and_add(&curPhaseAccesses, 1);
             //Note no break
         case PUTS:
@@ -141,6 +144,9 @@ uint64_t MD1Memory::access(MemReq& req) {
             break;
 
         default: panic("!?");
+    }
+    if (req.type == PUTX) {
+        return req.cycle + curWrLatency;
     }
     return req.cycle + ((req.type == PUTS)? 0 /*PUTS is not a real access*/ : curLatency);
 }
