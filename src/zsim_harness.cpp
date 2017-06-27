@@ -457,7 +457,7 @@ int main(int argc, char *argv[]) {
             info("Child %d done (in-loop catch)", cpid);
         }
 
-        if (secsStalled > 120) {
+        if (secsStalled > 300) {
             warn("Deadlock detected, killing children");
             sigHandler(SIGINT);
             exit(42);
