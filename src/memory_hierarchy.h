@@ -99,6 +99,7 @@ struct MemReq {
         PREFETCH      = (1<<5), //Prefetch GETS access. Only set at level where prefetch is issued; handled early in MESICC
     };
     uint32_t flags;
+    uint32_t wordIdx;   // Index containing which word(s) I am writing back. Bit for each word
 
     inline void set(Flag f) {flags |= f;}
     inline bool is (Flag f) const {return flags & f;}

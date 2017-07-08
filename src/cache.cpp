@@ -30,6 +30,8 @@
 #include "timing_event.h"
 #include "zsim.h"
 
+#include <csignal>
+
 Cache::Cache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accWrLat, uint32_t _invLat, const g_string& _name)
     : cc(_cc), array(_array), rp(_rp), numLines(_numLines), accLat(_accLat), accWrLat(_accWrLat), invLat(_invLat), name(_name) {}
 
@@ -93,6 +95,8 @@ uint64_t Cache::access(MemReq& req) {
             wbAcc = evRec->popRecord();
         }
 
+        printf("req.wordIdx from cache.cpp: %u\n", req.wordIdx);
+        //std::raise(SIGUSR1);
         respCycle = cc->processAccess(req, lineId, respCycle);
 
         // Access may have generated another timing record. If *both* access

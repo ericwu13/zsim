@@ -30,6 +30,22 @@
 #include "memory_hierarchy.h"
 #include "pad.h"
 #include "stats.h"
+#include "zsim.h"
+
+typedef struct mem_tran_s {
+    uint64_t cycle;
+    uint64_t addr;
+} mem_trans_s;
+
+typedef struct mem_rd_tran_s {
+    uint64_t cycle;
+    uint64_t addr;
+} mem_rd_trans_s;
+
+#define LOG_LENGTH 10000
+#define LOG_LENGTH_1 11000
+#define MEM_SIZE 262144
+#define PAGE_SIZE 16384 // 16Klines ==> 1MB for 64Byte/line
 
 /* Simple memory (or memory bank), has a fixed latency */
 class SimpleMemory : public MemObject {
@@ -68,14 +84,42 @@ class MD1Memory : public MemObject {
         Counter profLoad;
         Counter profUpdates;
         Counter profClampedLoads;
+        Counter profBuffered;
         uint32_t curPhaseAccesses;
 
         g_string name; //barely used
         lock_t updateLock;
+        lock_t PUTXLock;
+
+        FILE *logFile;
+        FILE *rdLogFile;
+        mem_trans_s memoryWriteLog[LOG_LENGTH_1];
+        mem_rd_trans_s memoryReadLog[LOG_LENGTH_1];
+
+        uint32_t index;
+        uint32_t rdIndex;
+        uint32_t numMemCtrls;
+        uint64_t *pageTable;
+        uint64_t *cycleTable;
+        uint32_t numPages;
+        uint32_t filledTableIdx;
+        Address Buffer[65536];
+        uint64_t cycles[65536];
+        uint32_t bufferSize;
+        uint32_t detailedMemory;
+        uint32_t bufferHit;
+        uint32_t bufferMiss;
+        uint32_t filled; 
+        uint64_t writtenBits[MEM_SIZE];
+        uint64_t flushCounter;
+        uint64_t previousFlush;
+        uint64_t flushPeriod;
+        uint32_t removedIdx;
+
         PAD();
 
     public:
-        MD1Memory(uint32_t lineSize, uint32_t megacyclesPerSecond, uint32_t megabytesPerSecond, uint32_t _zeroLoadLatency, uint32_t _zeroLoadWrLatency, g_string& _name);
+        MD1Memory(uint32_t lineSize, uint32_t megacyclesPerSecond, uint32_t megabytesPerSecond, uint32_t _zeroLoadLatency, uint32_t _zeroLoadWrLatency, uint32_t _buffer, uint32_t _bufferHit, uint32_t _bufferMiss, uint32_t _detailedMemory, uint64_t _flushPeriod, g_string& _name);
 
         void initStats(AggregateStat* parentStat) {
             AggregateStat* memStats = new AggregateStat();
@@ -87,6 +131,7 @@ class MD1Memory : public MemObject {
             profLoad.init("load", "Sum of load factors (0-100) per update"); memStats->append(&profLoad);
             profUpdates.init("ups", "Number of latency updates"); memStats->append(&profUpdates);
             profClampedLoads.init("clampedLoads", "Number of updates where the load was clamped to 95%"); memStats->append(&profClampedLoads);
+            profBuffered.init("bufWrites", "Writes to the SRAM buffer"); memStats->append(&profBuffered);
             parentStat->append(memStats);
         }
 
@@ -94,6 +139,12 @@ class MD1Memory : public MemObject {
         uint64_t access(MemReq& req);
 
         const char* getName() {return name.c_str();}
+
+        ~MD1Memory() {
+            info("Destroyer");
+            fwrite(memoryWriteLog, sizeof(mem_trans_s), index, logFile);
+            fclose(logFile);
+        }
 
     private:
         void updateLatency();

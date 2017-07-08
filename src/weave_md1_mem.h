@@ -57,7 +57,7 @@ class WeaveMD1Memory : public MD1Memory {
 
     public:
         WeaveMD1Memory(uint32_t lineSize, uint32_t megacyclesPerSecond, uint32_t megabytesPerSecond, uint32_t _zeroLoadLatency, uint32_t _boundLatency, uint32_t _domain, g_string& _name) :
-            MD1Memory(lineSize, megacyclesPerSecond, megabytesPerSecond, _zeroLoadLatency, _zeroLoadLatency, _name), zeroLoadLatency(_zeroLoadLatency), boundLatency(_boundLatency), domain(_domain)
+            MD1Memory(lineSize, megacyclesPerSecond, megabytesPerSecond, _zeroLoadLatency, _zeroLoadLatency, 0, 0, 0, 0, 0, _name), zeroLoadLatency(_zeroLoadLatency), boundLatency(_boundLatency), domain(_domain)
         {
             preDelay = zeroLoadLatency/2;
             postDelay = zeroLoadLatency - preDelay;

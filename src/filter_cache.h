@@ -47,8 +47,9 @@ class FilterCache : public Cache {
             volatile Address rdAddr;
             volatile Address wrAddr;
             volatile uint64_t availCycle;
+            volatile char usedWord;
 
-            void clear() {wrAddr = 0; rdAddr = 0; availCycle = 0;}
+            void clear() {wrAddr = 0; rdAddr = 0; availCycle = 0; usedWord = 0;}
         };
 
         //Replicates the most accessed line of each set in the cache
@@ -60,6 +61,19 @@ class FilterCache : public Cache {
 
         lock_t filterLock;
         uint64_t fGETSHit, fGETXHit;
+
+        // Cache line utilization and reuse stats
+        bool **byteAccessed;
+        uint32_t* accessCount;
+        // we need a separated access info array for filter array
+        // because filter array is not protected by lock. There will
+        // be race between invalidate and access
+        bool **fByteAccessed;
+        uint32_t* fAccessCount;
+        uint32_t numUtilBins;
+        static const uint32_t maxReuseLevel = 10;
+        VectorCounter lineUtilHist;
+        VectorCounter lineReuseHist;
 
     public:
         FilterCache(uint32_t _numSets, uint32_t _numLines, CC* _cc, CacheArray* _array,
@@ -99,7 +113,7 @@ class FilterCache : public Cache {
             parentStat->append(cacheStat);
         }
 
-        inline uint64_t load(Address vAddr, uint64_t curCycle) {
+        inline uint64_t load(Address vAddr, uint32_t size, uint64_t curCycle) {
             Address vLineAddr = vAddr >> lineBits;
             uint32_t idx = vLineAddr & setMask;
             uint64_t availCycle = filterArray[idx].availCycle; //read before, careful with ordering to avoid timing races
@@ -107,29 +121,37 @@ class FilterCache : public Cache {
                 fGETSHit++;
                 return MAX(curCycle, availCycle);
             } else {
-                return replace(vLineAddr, idx, true, curCycle);
+                return replace(vLineAddr, idx, true, curCycle, 0);
             }
         }
 
-        inline uint64_t store(Address vAddr, uint64_t curCycle) {
+        inline uint64_t store(Address vAddr, uint32_t size, uint64_t curCycle) {
             Address vLineAddr = vAddr >> lineBits;
             uint32_t idx = vLineAddr & setMask;
             uint64_t availCycle = filterArray[idx].availCycle; //read before, careful with ordering to avoid timing races
+            uint32_t wordIdx = (vAddr & 0x038) >> 3;
             if (vLineAddr == filterArray[idx].wrAddr) {
                 fGETXHit++;
                 //NOTE: Stores don't modify availCycle; we'll catch matches in the core
                 //filterArray[idx].availCycle = curCycle; //do optimistic store-load forwarding
                 return MAX(curCycle, availCycle);
             } else {
-                return replace(vLineAddr, idx, false, curCycle);
+                return replace(vLineAddr, idx, false, curCycle, 0);
             }
+
+            filterArray[idx].usedWord |= ((uint32_t)1 << wordIdx);
+            uint32_t offset = vAddr & ((1U << lineBits) - 1);
+            updateFilterAccessStats(idx, offset, size);
+            return curCycle;
         }
 
-        uint64_t replace(Address vLineAddr, uint32_t idx, bool isLoad, uint64_t curCycle) {
+        uint64_t replace(Address vLineAddr, uint32_t idx, bool isLoad, uint64_t curCycle, uint32_t wordIdx) {
             Address pLineAddr = procMask | vLineAddr;
             MESIState dummyState = MESIState::I;
             futex_lock(&filterLock);
-            MemReq req = {pLineAddr, isLoad? GETS : GETX, 0, &dummyState, curCycle, &filterLock, dummyState, srcId, reqFlags};
+            //Merge stats before fetching new line
+            //mergeAccessStats(filterArray[idx].rdAddr, idx);
+            MemReq req = {pLineAddr, isLoad? GETS : GETX, 0, &dummyState, curCycle, &filterLock, dummyState, srcId, reqFlags, (uint32_t)1 << wordIdx};
             uint64_t respCycle  = access(req);
 
             //Due to the way we do the locking, at this point the old address might be invalidated, but we have the new address guaranteed until we release the lock
@@ -166,6 +188,50 @@ class FilterCache : public Cache {
             for (uint32_t i = 0; i < numSets; i++) filterArray[i].clear();
             futex_unlock(&filterLock);
         }
+
+        // Update stats for one access
+        // Called when filter line is accessed, in FilterCache::load() and FilterCache::store()
+        void updateFilterAccessStats(uint32_t setId, uint32_t offset, uint32_t size) {
+            for (uint32_t byte = offset; byte < offset + size && byte < numUtilBins; byte++) {
+                fByteAccessed[setId][byte] = true;
+            }
+            fAccessCount[setId]++;
+        }
+
+        // Merge filter line stats into cache line stats
+        // Called when filter line is replaced, in FilterCache::replace()
+        void mergeAccessStats(Address oldVLineAddr, uint32_t setId) {
+            // Skip uninitialized line and invalid line
+            if (oldVLineAddr == 0 || oldVLineAddr == (Address)-1L) return;
+            Address oldPLineAddr = procMask | oldVLineAddr;
+            int32_t lineId = array->lookup(oldPLineAddr, nullptr, false);
+            assert(lineId != -1);
+            for (uint32_t byte = 0; byte < numUtilBins; byte++) {
+                byteAccessed[lineId][byte] |= fByteAccessed[setId][byte];
+                fByteAccessed[setId][byte] = false;
+            }
+            accessCount[lineId] += fAccessCount[setId];
+            fAccessCount[setId] = 0;
+        }
+
+        // Sum up cache line stats and record
+        // Called at line invalidation or eviction, in Cache::access() and Cache::invalidate()
+        void recordAccessStats(uint32_t lineId) {
+            uint32_t util = 0;
+            bool* lineByteAccessed = byteAccessed[lineId];
+            for (uint32_t byte = 0; byte < numUtilBins; byte++) {
+                util += lineByteAccessed[byte] ? 1 : 0;
+                lineByteAccessed[byte] = false;
+            }
+            if (util != 0) lineUtilHist.inc(util);
+
+            uint32_t reuseLevel = ilog2(accessCount[lineId]);
+            accessCount[lineId] = 0;
+            reuseLevel = MIN(reuseLevel, maxReuseLevel);
+            lineReuseHist.inc(reuseLevel);
+        }
+
+
 };
 
 #endif  // FILTER_CACHE_H_

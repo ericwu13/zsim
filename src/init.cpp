@@ -343,8 +343,14 @@ MemObject* BuildMemoryController(Config& config, uint32_t lineSize, uint32_t fre
         // Peak bandwidth (in MB/s)
         uint32_t bandwidth = config.get<uint32_t>("sys.mem.bandwidth", 6400);
         uint32_t wrLatency = config.get<uint32_t>("sys.mem.wrLatency", 100);
+        uint32_t buffer = config.get<uint32_t>("sys.mem.bufferSize", 0);
+        uint32_t bufferHit = config.get<uint32_t>("sys.mem.bufferHit", 0);
+        uint32_t bufferMiss = config.get<uint32_t>("sys.mem.bufferMiss", 0);
+        uint64_t flushPeriod = config.get<uint64_t>("sys.mem.flushPeriod", 0);
+        uint32_t detailedMemory = config.get<uint32_t>("sys.mem.detailedTrace", 0);
 
-        mem = new MD1Memory(lineSize, frequency, bandwidth, latency, wrLatency, name);
+
+        mem = new MD1Memory(lineSize, frequency, bandwidth, latency, wrLatency, buffer, bufferHit, bufferMiss, flushPeriod, detailedMemory, name);
     } else if (type == "WeaveMD1") {
         uint32_t bandwidth = config.get<uint32_t>("sys.mem.bandwidth", 6400);
         uint32_t boundLatency = config.get<uint32_t>("sys.mem.boundLatency", latency);

@@ -67,13 +67,13 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
         case S:
         case E:
             {
-                MemReq req = {wbLineAddr, PUTS, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
+                MemReq req = {wbLineAddr, PUTS, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/, wordidx[lineId]};
                 respCycle = parents[getParentId(wbLineAddr)]->access(req);
             }
             break;
         case M:
             {
-                MemReq req = {wbLineAddr, PUTX, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
+                MemReq req = {wbLineAddr, PUTX, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/, wordidx[lineId]};
                 respCycle = parents[getParentId(wbLineAddr)]->access(req);
             }
             break;
@@ -81,10 +81,12 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
         default: panic("!?");
     }
     assert_msg(*state == I, "Wrong final state %s on eviction", MESIStateName(*state));
+    wordidx[lineId] = 0;
     return respCycle;
 }
 
-uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags) {
+uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags, uint32_t reqWordIdx) {
+    printf("reqWordIdx was %u\n", reqWordIdx);
     uint64_t respCycle = cycle;
     MESIState* state = &array[lineId];
     switch (type) {
@@ -99,12 +101,13 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
                 //Silent transition, record that block was written to
                 *state = M;
             }
+            wordidx[lineId] |= reqWordIdx;
             profPUTX.inc();
             break;
         case GETS:
             if (*state == I) {
                 uint32_t parentId = getParentId(lineAddr);
-                MemReq req = {lineAddr, GETS, selfId, state, cycle, &ccLock, *state, srcId, flags};
+                MemReq req = {lineAddr, GETS, selfId, state, cycle, &ccLock, *state, srcId, flags, wordidx[lineId]};
                 uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
                 uint32_t netLat = parentRTTs[parentId];
                 profGETNextLevelLat.inc(nextLevelLat);
@@ -112,6 +115,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
                 respCycle += nextLevelLat + netLat;
                 profGETSMiss.inc();
                 assert(*state == S || *state == E);
+                wordidx[lineId] = 0;
             } else {
                 profGETSHit.inc();
             }
@@ -122,12 +126,13 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
                 if (*state == I) profGETXMissIM.inc();
                 else profGETXMissSM.inc();
                 uint32_t parentId = getParentId(lineAddr);
-                MemReq req = {lineAddr, GETX, selfId, state, cycle, &ccLock, *state, srcId, flags};
+                MemReq req = {lineAddr, GETX, selfId, state, cycle, &ccLock, *state, srcId, flags, reqWordIdx};
                 uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
                 uint32_t netLat = parentRTTs[parentId];
                 profGETNextLevelLat.inc(nextLevelLat);
                 profGETNetLat.inc(netLat);
                 respCycle += nextLevelLat + netLat;
+                wordidx[lineId] = reqWordIdx;
             } else {
                 if (*state == E) {
                     // Silent transition
@@ -140,6 +145,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
                     *state = M;
                 }
                 profGETXHit.inc();
+                wordidx[lineId] |= reqWordIdx;
             }
             assert_msg(*state == M, "Wrong final state on GETX, lineId %d numLines %d, finalState %s", lineId, numLines, MESIStateName(*state));
             break;
@@ -150,8 +156,10 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
     return respCycle;
 }
 
-void MESIBottomCC::processWritebackOnAccess(Address lineAddr, uint32_t lineId, AccessType type) {
+void MESIBottomCC::processWritebackOnAccess(Address lineAddr, uint32_t lineId, AccessType type, uint32_t inputWordIdx) {
+    printf("inputWordIdx was %u\n", inputWordIdx);
     MESIState* state = &array[lineId];
+    wordidx[lineId] = wordidx[lineId] | inputWordIdx;
     assert(*state == M || *state == E);
     if (*state == E) {
         //Silent transition to M if in E
