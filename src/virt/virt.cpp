@@ -78,7 +78,10 @@ void VirtSyscallEnter(THREADID tid, CONTEXT *ctxt, SYSCALL_STANDARD std, const c
         warn("syscall %d out of range", syscall);
         postPatchFunctions[tid] = NullPostPatch;
     } else {
-        postPatchFunctions[tid] = prePatchFunctions[syscall]({tid, ctxt, std, patchRoot, isNopThread});
+        // PATCH: don't virtualize sched_set/getaffinity
+        if (syscall != 203 and syscall != 204) {
+            postPatchFunctions[tid] = prePatchFunctions[syscall]({tid, ctxt, std, patchRoot, isNopThread});
+        }
     }
 }
 
