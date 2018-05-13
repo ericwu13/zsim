@@ -1009,7 +1009,8 @@ BOOL FollowChild(CHILD_PROCESS childProcess, VOID * userData) {
     //Set up Pin command
     //NOTE: perProcessDir may be active, we don't care much... run in the same dir as parent process
     //NOTE: we recycle our own procIdx on an exec, but fork() changed it so we need to update Pin's command line
-    g_vector<g_string> args = zinfo->pinCmd->getPinCmdArgs(procIdx);
+    // DEBUG: should targetPID be 0 here?
+    g_vector<g_string> args = zinfo->pinCmd->getPinCmdArgs(procIdx, 0);
     uint32_t numArgs = args.size();
     const char* pinArgs[numArgs];
     for (uint32_t i = 0; i < numArgs; i++) pinArgs[i] = args[i].c_str();

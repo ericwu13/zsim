@@ -974,7 +974,8 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
     CreateProcessTree(config);
     zinfo->procArray[0]->notifyStart(); //called here so that we can detect end-before-start races
 
-    zinfo->pinCmd = new PinCmd(&config, nullptr /*don't pass config file to children --- can go either way, it's optional*/, outputDir, shmid);
+    // DEBUG: should the pid_t argument be 0 here?
+    zinfo->pinCmd = new PinCmd(&config, nullptr /*don't pass config file to children --- can go either way, it's optional*/, outputDir, shmid, 0);
 
     //Caches, cores, memory controllers
     InitSystem(config);

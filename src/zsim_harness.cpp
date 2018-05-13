@@ -68,6 +68,10 @@ struct ProcInfo {
     volatile ProcStatus status;
 };
 
+// DEBUG
+static int shouldTerminate = 0;
+static pid_t targetPID = 0;
+
 //At most as many processes as threads, plus one extra process per child if we launch a debugger
 #define MAX_CHILDREN (2*MAX_THREADS)
 ProcInfo childInfo[MAX_CHILDREN];
@@ -93,6 +97,7 @@ int getNumChildren() {
 }
 
 int eraseChild(int pid) {
+    printf("Called eraseChild()\n");
     for (int i = 0; i < MAX_CHILDREN; i++) {
         if (childInfo[i].pid == pid) {
             assert_msg(childInfo[i].status == PS_RUNNING, "i=%d pid=%d status=%d", i, pid, childInfo[i].status);
@@ -105,8 +110,11 @@ int eraseChild(int pid) {
 
 /* Signal handlers */
 
+// DEBUG: we want to wait for n+1 child processes, since for zsim-attach mode,
+// the pinbin process exits immediately after instrumenting the target binary?
 void chldSigHandler(int sig) {
     assert(sig == SIGCHLD);
+    printf("Got SIGCHLD\n");
     int status;
     int cpid;
     while ((cpid = waitpid(-1, &status, WNOHANG)) > 0) {
@@ -236,22 +244,27 @@ void LaunchProcess(uint32_t procIdx) {
         assert(cpid > 0);
         childInfo[procIdx].pid = cpid;
         childInfo[procIdx].status = PS_RUNNING;
+        printf("Just marked child as running.\n");
     } else { //child
         // Set the child's vars and get the command
         // NOTE: We set the vars first so that, when parsing the command, wordexp takes those vars into account
         pinCmd->setEnvVars(procIdx);
         const char* inputFile;
-        g_vector<g_string> args = pinCmd->getFullCmdArgs(procIdx, &inputFile);
+        // DEBUG: will this work?
+        g_vector<g_string> args = pinCmd->getFullCmdArgs(procIdx, &inputFile, targetPID);
 
         //Copy args to a const char* [] for exec
         int nargs = args.size()+1;
         const char* aptrs[nargs];
 
         trace(Harness, "Calling arguments:");
+        printf("pin arguments:\n");
         for (unsigned int i = 0; i < args.size(); i++) {
             trace(Harness, " arg%d = %s", i, args[i].c_str());
             aptrs[i] = args[i].c_str();
+            printf("%s ", args[i].c_str());
         }
+        printf("\n");
         aptrs[nargs-1] = nullptr;
 
         //Chdir to process dir if needed
@@ -305,6 +318,15 @@ void LaunchProcess(uint32_t procIdx) {
     }
 }
 
+// DEBUG
+// Hacky signal handler to terminate the main zsim loop when we want
+void terminationHandler(int sig) {
+    assert(sig == SIGUSR2);
+    printf("Got signal to end zsim loop.\n");
+
+    shouldTerminate = 1;
+}
+
 
 int main(int argc, char *argv[]) {
     if (argc == 2 && std::string(argv[1]) == "-v") {
@@ -316,9 +338,13 @@ int main(int argc, char *argv[]) {
     info("Starting zsim, built %s (rev %s)", ZSIM_BUILDDATE, ZSIM_BUILDVERSION);
     startTime = time(nullptr);
 
-    if (argc != 2) {
-        info("Usage: %s config_file", argv[0]);
+    if (argc != 2 && argc != 3) {
+        info("Usage: %s config_file <PID to attach to>", argv[0]);
         exit(1);
+    }
+
+    if (argc == 3) {
+        targetPID = atoi(argv[2]);
     }
 
     //Canonicalize paths --- because we change dirs, we deal in absolute paths
@@ -335,6 +361,9 @@ int main(int argc, char *argv[]) {
     signal(SIGTERM, sigHandler);
 
     signal(SIGCHLD, chldSigHandler);
+
+    // DEBUG
+    signal(SIGUSR2, terminationHandler);
 
     //SIGUSR1 is used by children processes when they want to get a debugger session started;
     struct sigaction debugSa;
@@ -388,7 +417,7 @@ int main(int argc, char *argv[]) {
     if (aslr) info("Not disabling ASLR, multiprocess runs will fail");
 
     //Create children processes
-    pinCmd = new PinCmd(&conf, configFile, outputDir, shmid);
+    pinCmd = new PinCmd(&conf, configFile, outputDir, shmid, targetPID);
     uint32_t numProcs = pinCmd->getNumCmdProcs();
 
     for (uint32_t procIdx = 0; procIdx < numProcs; procIdx++) {
@@ -404,7 +433,7 @@ int main(int argc, char *argv[]) {
 
     int64_t lastNumPhases = 0;
 
-    while (getNumChildren() > 0) {
+    while (getNumChildren() > 0 || ((targetPID != 0) && !shouldTerminate)) {
         if (!gm_isready()) {
             usleep(1000);  // wait till proc idx 0 initializes everyhting
             continue;
@@ -451,10 +480,13 @@ int main(int argc, char *argv[]) {
         printHeartbeat(zinfo);
 
         //This solves a weird race in multiprocess where SIGCHLD does not always fire...
-        int cpid = -1;
-        while ((cpid = waitpid(-1, nullptr, WNOHANG)) > 0) {
-            eraseChild(cpid);
-            info("Child %d done (in-loop catch)", cpid);
+        // DEBUG
+        if (targetPID == 0) {
+            int cpid = -1;
+            while ((cpid = waitpid(-1, nullptr, WNOHANG)) > 0) {
+                eraseChild(cpid);
+                info("Child %d done (in-loop catch)", cpid);
+            }
         }
 
         if (secsStalled > 120) {

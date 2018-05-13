@@ -37,7 +37,7 @@
 #define QUOTED_(x) #x
 #define QUOTED(x) QUOTED_(x)
 
-PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint64_t shmid) {
+PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint64_t shmid, pid_t targetPID) {
     //Figure the program paths
     const char* zsimEnvPath = getenv("ZSIM_PATH");
     g_string pinPath, zsimPath;
@@ -60,6 +60,16 @@ PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint
     args.push_back("1");
     // Fix Pin breakage
     args.push_back("-ifeellucky");
+
+    // DEBUG: hacky... add the pid to be attached to.
+    //string targetPIDStr = GetStdoutFromCommand("pgrep -u bartolo pc");
+    //printf("target PID: %s\n", targetPIDStr.c_str());
+    if (targetPID != 0) {
+        // DEBUG:
+        printf("Appending targetPID: %i\n", targetPID);
+        args.push_back("-pid");
+        args.push_back(std::to_string(targetPID).c_str());
+    }
 
     //Additional options (e.g., -smc_strict for Java), parsed from config
     const char* pinOptions = conf->get<const char*>("sim.pinOptions", "");
@@ -126,20 +136,28 @@ PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint
     }
 }
 
-g_vector<g_string> PinCmd::getPinCmdArgs(uint32_t procIdx) {
+g_vector<g_string> PinCmd::getPinCmdArgs(uint32_t procIdx, pid_t targetPID) {
     g_vector<g_string> res = args;
 
     std::stringstream procIdx_ss;
     procIdx_ss << procIdx;
     res.push_back("-procIdx");
     res.push_back(procIdx_ss.str().c_str());
-    res.push_back("--");
+    // DEBUG: no -- separator for pin's -pid mode
+    if (targetPID == 0) {
+        res.push_back("--");
+    }
     return res;
 }
 
-g_vector<g_string> PinCmd::getFullCmdArgs(uint32_t procIdx, const char** inputFile) {
+g_vector<g_string> PinCmd::getFullCmdArgs(uint32_t procIdx, const char** inputFile, pid_t targetPID) {
     assert(procIdx < procInfo.size()); //must be one of the topmost processes
-    g_vector<g_string> res = getPinCmdArgs(procIdx);
+    g_vector<g_string> res = getPinCmdArgs(procIdx, targetPID);
+
+    // DEBUG: chop off the command from the .cfg file
+    if (targetPID != 0) {
+        return res;
+    }
 
     g_string cmd = procInfo[procIdx].cmd;
 
