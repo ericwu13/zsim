@@ -28,17 +28,20 @@
 
 #include "zsim.h"
 #include <algorithm>
+#include <arpa/inet.h>
 #include <bits/signum.h>
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <fstream>
 #include <iostream>
+#include <netinet/in.h>
 #include <sched.h>
 #include <sstream>
 #include <string>
 #include <sys/prctl.h>
 #include <sys/resource.h>
 #include <sys/time.h>
+#include <sys/uio.h>
 #include <unistd.h>
 #include "access_tracing.h"
 #include "constants.h"
@@ -100,6 +103,14 @@ GlobSimInfo* zinfo;
 uint32_t procIdx;
 uint32_t lineBits; //process-local for performance, but logically global
 Address procMask;
+
+/* Extra variables to support network tracing. */
+int currSyscallNo = -1;
+int sockFD = -1;
+struct sockaddr_in *sockAddr = NULL;
+//struct iovec *iov = NULL;
+//int iovcnt = -1;
+std::unordered_map<int, struct SockStatInfo> SockStats;
 
 static ProcessTreeNode* procTreeNode;
 
@@ -897,6 +908,28 @@ VOID SyscallEnter(THREADID tid, CONTEXT *ctxt, SYSCALL_STANDARD std, VOID *v) {
 
     if (isNopThread || isRetryThread) return;
 
+    /* Record some syscall information; will be useful in SyscallExit(),
+     * particularly for network tracing. */
+    currSyscallNo = PIN_GetSyscallNumber(ctxt, std);
+
+    // connect() or accept()
+    if (currSyscallNo == 42 || currSyscallNo == 43) {
+        sockFD = PIN_GetSyscallArgument(ctxt, std, 0);
+        sockAddr = (struct sockaddr_in *)PIN_GetSyscallArgument(ctxt, std, 1);
+    }
+    // write(), read(), sendto(), or recvfrom()
+    if (currSyscallNo == 1 || currSyscallNo == 0 ||
+        currSyscallNo == 44 || currSyscallNo == 45) {
+        sockFD = PIN_GetSyscallArgument(ctxt, std, 0);
+    }
+
+    // TODO patch for readv() and writev()
+    if (currSyscallNo == 19 || currSyscallNo == 20) {
+        sockFD = PIN_GetSyscallArgument(ctxt, std, 0);
+        //iov = (struct iovec *)PIN_GetSyscallArgument(ctxt, std, 1);
+        //iovcnt = PIN_GetSyscallArgument(ctxt, std, 2);
+    }
+
     /* NOTE: It is possible that we take 2 syscalls back to back with any
      * intervening instrumentation, so we need to check. In that case, this is
      * treated as a single syscall scheduling-wise (no second leave without
@@ -918,6 +951,89 @@ VOID SyscallEnter(THREADID tid, CONTEXT *ctxt, SYSCALL_STANDARD std, VOID *v) {
 
 VOID SyscallExit(THREADID tid, CONTEXT *ctxt, SYSCALL_STANDARD std, VOID *v) {
     assert(inSyscall[tid]); inSyscall[tid] = false;
+
+    // TODO DEBUG
+    // TODO should cache the pointer in the entry fn, and not rely on it being the same here
+    if ((currSyscallNo == 42 || currSyscallNo == 43)) {
+        unsigned short family = sockAddr->sin_family;
+        if (family == AF_INET || family == AF_INET6) {
+            struct SockStatInfo *ssi = &SockStats[sockFD];
+            memset(ssi, 0, sizeof(struct SockStatInfo));
+            ssi->sockFD = sockFD;
+            ssi->remoteFamily = family;
+            if (family == AF_INET) inet_ntop(AF_INET, &sockAddr->sin_addr, ssi->remoteAddr, INET_ADDRSTRLEN);
+            else if (family == AF_INET6) inet_ntop(AF_INET6, &sockAddr->sin_addr, ssi->remoteAddr, INET6_ADDRSTRLEN);
+            ssi->remotePort = ntohs(sockAddr->sin_port);
+            if (currSyscallNo == 42) ssi->initiallyIncoming = false;
+            else if (currSyscallNo == 43) ssi->initiallyIncoming = true;
+
+
+            /*
+            unsigned short portNo = ntohs(sockAddr->sin_port);
+            char ipStr[128];
+            if (family == AF_INET) inet_ntop(AF_INET, &sockAddr->sin_addr, ipStr, INET_ADDRSTRLEN);
+            else if (family == AF_INET6) inet_ntop(AF_INET6, &sockAddr->sin_addr, ipStr, INET6_ADDRSTRLEN);
+            */
+
+            /*
+            printf("\x1B[31m" "FD: %u, IP: %s (%u) (in? %i)" "\x1B[0m\n", ssi->sockFD, ssi->remoteAddr, ssi->remotePort, ssi->initiallyIncoming);
+            */
+        }
+
+    }
+
+
+    if ((currSyscallNo == 19 || currSyscallNo == 20) && !SockStats.count(sockFD)) {   // connect() or accept()
+            struct SockStatInfo *ssi = &SockStats[sockFD];
+            memset(ssi, 0, sizeof(struct SockStatInfo));
+            ssi->sockFD = sockFD;
+    }
+
+    // First, filter for syscalls on open sockets
+    if (!!SockStats.count(sockFD)) {
+        bool performedIO = false; // did we actually do a TX/RX op?
+        struct SockStatInfo *ssi = &SockStats[sockFD];
+        // record a TX operation (write() or sendto())
+        if (currSyscallNo == 1 || currSyscallNo == 44 || currSyscallNo == 20) {
+            performedIO = true;
+            uint64_t bytesTX = PIN_GetSyscallReturn(ctxt, std);
+            ssi->numTXs += 1;
+            ssi->bytesTX += bytesTX;
+        }
+        // record an RX operation (read() or recvfrom())
+        else if (currSyscallNo == 0 || currSyscallNo == 45 || currSyscallNo == 19) {
+            performedIO = true;
+            uint64_t bytesRX = PIN_GetSyscallReturn(ctxt, std);
+            ssi->numRXs += 1;
+            ssi->bytesRX += bytesRX;
+        }
+
+        // TODO this will be *way* too loggy for any high-throughput network traffic. Need to dump periodically (or just eventually?)
+        if (performedIO) {
+        /*
+            // print only on interval
+            uint64_t interval = 1;
+            if (ssi->numTXs % interval == 0 || ssi->numRXs % interval == 0)
+                printf("\x1B[32m" "FD: %u, IP: %s (%u) (in? %i): TXcount: %zu (%zu), RXcount: %zu (%zu)" "\x1B[0m\n",
+                    ssi->sockFD, ssi->remoteAddr, ssi->remotePort, ssi->initiallyIncoming, ssi->numTXs, ssi->bytesTX, ssi->numRXs, ssi->bytesRX);
+        */
+        }
+    }
+
+    // TODO debug - just print if we did a sendto() or recv() (to get around the connect()/accept()-after-attach issue)
+    /*
+    if (currSyscallNo == 44 || currSyscallNo == 45) {
+        printf("Logged a %i (sendto() or recvfrom()).\n", currSyscallNo);
+    }
+    */
+
+    // Reset the net-tracing variables to reflect us exiting the syscall
+    currSyscallNo = -1;
+    sockFD = -1;
+    sockAddr = NULL;
+    //struct iovec *iov = NULL;
+    //int iovcnt = -1;
+
 
     PostPatchAction ppa = VirtSyscallExit(tid, ctxt, std);
     if (ppa == PPA_USE_JOIN_PTRS) {

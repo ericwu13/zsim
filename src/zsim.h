@@ -72,6 +72,21 @@ enum ProcExitStatus {
     PROC_RESTARTME  = 2
 };
 
+struct SockStatInfo {
+    /* Filled in upon connect()/accept(). */
+    int sockFD;
+    unsigned short remoteFamily;
+    char remoteAddr[128];
+    unsigned short remotePort;
+    bool initiallyIncoming; // true if we accepted, false if we connected
+
+    /* Filled in upon socket OR file reads/writes. */
+    uint64_t numTXs;
+    uint64_t numRXs;
+    uint64_t bytesTX;
+    uint64_t bytesRX;
+};
+
 struct GlobSimInfo {
     //System configuration values, all read-only, set at initialization
     uint32_t numCores;
