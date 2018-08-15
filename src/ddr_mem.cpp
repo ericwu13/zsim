@@ -37,6 +37,17 @@
 //#define DEBUG(args...) info(args)
 #define DEBUG(args...)
 
+// right now, we never close it
+#include <fstream>
+static std::ofstream memtraceFile("./memtrace.bin", std::ios::out | std::ios::binary | std::ios::trunc);
+
+/* automatically padded to 24-bytes total */
+typedef struct record {
+    void *addr;
+    uint64_t value;
+    bool write; // true: write; false: read
+} record_t;
+
 // Recorder-allocated event, represents one read or write request
 class DDRMemoryAccEvent : public TimingEvent {
     private:
@@ -306,6 +317,14 @@ void DDRMemory::enqueue(DDRMemoryAccEvent* ev, uint64_t sysCycle) {
     req->addr = ev->getAddr();
     req->loc = mapLineAddr(ev->getAddr());
     req->write = ev->isWrite();
+
+    /* BEGIN memory trace dump functionality */
+    record_t r = {NULL, 0, false};
+    r.addr = (void *)req->addr;
+    r.value = -1;
+    r.write = req->write;
+    memtraceFile.write((char *)&r, sizeof(r));
+    /* END memory trace dump functionality */
 
     req->arrivalCycle = memCycle;
     req->startSysCycle = sysCycle;
