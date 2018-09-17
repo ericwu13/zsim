@@ -60,8 +60,23 @@ External dependencies: `gcc >=4.6, pin, scons, libconfig, libhdf5, libelfg0`
    earlier Pin versions have strange performance regressions on this machine
    (extremely low IPC).
 
-3. zsim requires some additional libraries. If they are not installed in your
-   system, you will need to download and build them:
+3. zsim requires some additional libraries.
+
+   For Centos 7/RHEL 7:
+     * elfutils-libelf-devel
+     * hdf5-devel
+     * libconfig-devel
+     * scons
+
+   For Ubuntu:
+     * libelfg0
+     * libconfig
+     * libhdf5
+     * scons
+
+
+   If they are not available with your package manager, you will need to
+   download and build them:
 
   3.1 libconfig, http://www.hyperrealm.com/libconfig. You may use the system's
       package if it's recent enough, or build your own. To install locally, untar,
@@ -87,7 +102,9 @@ External dependencies: `gcc >=4.6, pin, scons, libconfig, libhdf5, libelfg0`
 
 5. Compile zsim: `scons -j16`
 
-6. Launch a test run: `./build/opt/zsim tests/simple.cfg`
+6. Create a directory for zsim to dump its output files into, and cd into it: `mkdir run && cd run`
+
+7. Launch a test run: `../build/opt/zsim ../tests/simple.cfg`.
 
 For more compilation options, run scons --help. You can build debug, optimized
 and release variants of the simulator (--d, --o, --r options). Optimized (opt)
