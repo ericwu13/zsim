@@ -38,6 +38,7 @@ class Config;
 class PinCmd : public GlobAlloc {
     private:
         g_vector<g_string> args;
+        g_vector<pid_t> targetPIDs;
 
         struct ProcCmdInfo {
             g_string cmd;
@@ -49,12 +50,12 @@ class PinCmd : public GlobAlloc {
         g_vector<ProcCmdInfo> procInfo; //one entry for each process that the harness launches (not for child procs)
 
     public:
-        PinCmd(Config* conf, const char* configFile, const char* outputDir, uint64_t shmid, pid_t targetPID);
+        PinCmd(Config* conf, const char* configFile, const char* outputDir, uint64_t shmid, g_vector<pid_t> targetPIDs);
         g_vector<g_string> getPinCmdArgs(uint32_t procIdx, pid_t targetPID);
         g_vector<g_string> getFullCmdArgs(uint32_t procIdx, const char** inputFile, pid_t targetPID);
         void setEnvVars(uint32_t procIdx);
 
-        uint32_t getNumCmdProcs() {return procInfo.size();}
+        uint32_t getNumCmdProcs();
 };
 
 #endif  // PIN_CMD_H_

@@ -37,7 +37,7 @@
 #define QUOTED_(x) #x
 #define QUOTED(x) QUOTED_(x)
 
-PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint64_t shmid, pid_t targetPID) {
+PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint64_t shmid, g_vector<pid_t> targetPIDs) {
     //Figure the program paths
     const char* zsimEnvPath = getenv("ZSIM_PATH");
     g_string pinPath, zsimPath;
@@ -61,9 +61,10 @@ PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint
     // Fix Pin breakage
     args.push_back("-ifeellucky");
 
-    // DEBUG: hacky... add the pid to be attached to.
-    //string targetPIDStr = GetStdoutFromCommand("pgrep -u bartolo pc");
-    //printf("target PID: %s\n", targetPIDStr.c_str());
+    this->targetPIDs = targetPIDs;
+
+    // TODO do this elsewhere... but can we (does the -pid argument to pin need to come first? shift vec elements (hacky) instead?)
+    /*
     if (targetPID != 0) {
         // DEBUG:
         // TODO Since this is the constructor, it may run even if we don't end up using it.
@@ -71,6 +72,7 @@ PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint
         args.push_back("-pid");
         args.push_back(std::to_string(targetPID).c_str());
     }
+    */
 
     //Additional options (e.g., -smc_strict for Java), parsed from config
     const char* pinOptions = conf->get<const char*>("sim.pinOptions", "");
@@ -155,37 +157,44 @@ g_vector<g_string> PinCmd::getFullCmdArgs(uint32_t procIdx, const char** inputFi
     assert(procIdx < procInfo.size()); //must be one of the topmost processes
     g_vector<g_string> res = getPinCmdArgs(procIdx, targetPID);
 
-    // DEBUG: chop off the command from the .cfg file
-    if (targetPID != 0) {
-        return res;
+
+    if (targetPID == 0) {   // normal, non-attach mode
+        g_string cmd = procInfo[procIdx].cmd;
+
+        /* Loader injection: Turns out that Pin mingles with the simulated binary, which decides the loader used,
+         * even when PIN_VM_LIBRARY_PATH is used. This kill the invariance on libzsim.so's loaded address, because
+         * loaders in different children have different sizes. So, if specified, we prefix the program with the
+         * given loader. This is optional because it won't work with statically linked binaries.
+         *
+         * BTW, thinking of running pin under a specific loaderto fix this instead? Nope, it gets into an infinite loop.
+         */
+        if (procInfo[procIdx].loader != "") {
+            cmd = procInfo[procIdx].loader + " " + cmd;
+            info("Injected loader on process%d, command line: %s", procIdx, cmd.c_str());
+            warn("Loader injection makes Pin unaware of symbol routines, so things like routine patching"
+                 "will not work! You can homogeneize the loaders instead by editing the .interp ELF section");
+        }
+
+        //Parse command -- use glibc's wordexp to parse things like quotes, handle argument expansion, etc correctly
+        wordexp_t p;
+        wordexp(cmd.c_str(), &p, 0);
+        for (uint32_t i = 0; i < p.we_wordc; i++) {
+            res.push_back(g_string(p.we_wordv[i]));
+        }
+        wordfree(&p);
+
+        //Input redirect
+        *inputFile = (procInfo[procIdx].input == "")? nullptr : procInfo[procIdx].input.c_str();
     }
 
-    g_string cmd = procInfo[procIdx].cmd;
-
-    /* Loader injection: Turns out that Pin mingles with the simulated binary, which decides the loader used,
-     * even when PIN_VM_LIBRARY_PATH is used. This kill the invariance on libzsim.so's loaded address, because
-     * loaders in different children have different sizes. So, if specified, we prefix the program with the
-     * given loader. This is optional because it won't work with statically linked binaries.
-     *
-     * BTW, thinking of running pin under a specific loaderto fix this instead? Nope, it gets into an infinite loop.
-     */
-    if (procInfo[procIdx].loader != "") {
-        cmd = procInfo[procIdx].loader + " " + cmd;
-        info("Injected loader on process%d, command line: %s", procIdx, cmd.c_str());
-        warn("Loader injection makes Pin unaware of symbol routines, so things like routine patching"
-             "will not work! You can homogeneize the loaders instead by editing the .interp ELF section");
+    else { // attach mode
+        // DEBUG:
+        printf("Appending targetPID: %i\n", targetPID);
+        // insert at indices 5 and 6, right before the '-t libzsim.so' arguments
+        res.insert(res.begin() + 5, "-pid");
+        res.insert(res.begin() + 6, std::to_string(targetPID).c_str());
     }
 
-    //Parse command -- use glibc's wordexp to parse things like quotes, handle argument expansion, etc correctly
-    wordexp_t p;
-    wordexp(cmd.c_str(), &p, 0);
-    for (uint32_t i = 0; i < p.we_wordc; i++) {
-        res.push_back(g_string(p.we_wordv[i]));
-    }
-    wordfree(&p);
-
-    //Input redirect
-    *inputFile = (procInfo[procIdx].input == "")? nullptr : procInfo[procIdx].input.c_str();
     return res;
 }
 
@@ -202,5 +211,10 @@ void PinCmd::setEnvVars(uint32_t procIdx) {
         }
         wordfree(&p);
     }
+}
+
+uint32_t PinCmd::getNumCmdProcs() {
+    if (targetPIDs.size() != 0) return targetPIDs.size();
+    else return procInfo.size();
 }
 
