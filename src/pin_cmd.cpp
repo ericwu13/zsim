@@ -66,6 +66,7 @@ PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint
     //printf("target PID: %s\n", targetPIDStr.c_str());
     if (targetPID != 0) {
         // DEBUG:
+        // TODO Since this is the constructor, it may run even if we don't end up using it.
         printf("Appending targetPID: %i\n", targetPID);
         args.push_back("-pid");
         args.push_back(std::to_string(targetPID).c_str());

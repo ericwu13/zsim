@@ -33,6 +33,9 @@
 
 #define MAX_SYSCALLS 350  // doesn't need to be accurate
 
+// https://github.com/s5z/zsim/issues/1
+#define SYS_getcpu (168)
+
 PrePatchFn prePatchFunctions[MAX_SYSCALLS];
 PostPatchFn postPatchFunctions[MAX_THREADS];
 

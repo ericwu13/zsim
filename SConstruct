@@ -70,7 +70,8 @@ def buildSim(cppFlags, dir, type, pgo=None):
 
     env["CPPPATH"] = [xedPath,
             pinInclDir, joinpath(pinInclDir, "gen"),
-            joinpath(PINPATH, "extras/components/include")]
+            joinpath(PINPATH, "extras/components/include"),
+            "/ccs/home/bartolo/zsim_deps/include"]
 
     # Perform trace logging?
     ##env["CPPFLAGS"] += " -D_LOG_TRACE_=1"
@@ -79,7 +80,7 @@ def buildSim(cppFlags, dir, type, pgo=None):
     ##env["CPPFLAGS"] += " -DDEBUG=1"
 
     # Be a Warning Nazi? (recommended)
-    env["CPPFLAGS"] += " -Werror "
+    #env["CPPFLAGS"] += " -Werror "
 
     # Enables lib and harness to use the same info/log code,
     # but only lib uses pin locks for thread safety
@@ -114,7 +115,8 @@ def buildSim(cppFlags, dir, type, pgo=None):
     env["LIBPATH"] = []
     env["LIBS"] = ["config++"]
 
-    env["LINKFLAGS"] = ""
+    #env["LINKFLAGS"] = ""
+    env["LINKFLAGS"] = " -L/ccs/home/bartolo/zsim_deps/lib"
 
     if useIcc:
         # icc libs
@@ -148,8 +150,8 @@ def buildSim(cppFlags, dir, type, pgo=None):
 
     # HDF5
     conf = Configure(Environment(), conf_dir=joinpath(buildDir, ".sconf_temp"), log_file=joinpath(buildDir, "sconf.log"))
-    # if conf.CheckLib('hdf5') and conf.CheckLib('hdf5_hl'):
-    if True:
+    # Short-circuit this; already added zsim_deps/include to CPPPATH above
+    if True: #conf.CheckLib('hdf5') and conf.CheckLib('hdf5_hl'):
         env["PINLIBS"] += ["hdf5", "hdf5_hl"]
     elif conf.CheckLib('hdf5_serial') and conf.CheckLib('hdf5_serial_hl'):
         # Serial version, in Ubuntu 15.04 and later.

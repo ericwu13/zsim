@@ -27,6 +27,7 @@
  * slave pin processes, coordinating and terminating runs, and stats printing.
  */
 
+#include <algorithm>
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
@@ -70,7 +71,8 @@ struct ProcInfo {
 
 // DEBUG
 static int shouldTerminate = 0;
-static pid_t targetPID = 0;
+std::vector<pid_t> targetPIDs;
+static pid_t targetPID;
 
 //At most as many processes as threads, plus one extra process per child if we launch a debugger
 #define MAX_CHILDREN (2*MAX_THREADS)
@@ -338,13 +340,17 @@ int main(int argc, char *argv[]) {
     info("Starting zsim, built %s (rev %s)", ZSIM_BUILDDATE, ZSIM_BUILDVERSION);
     startTime = time(nullptr);
 
-    if (argc != 2 && argc != 3) {
-        info("Usage: %s config_file <PID to attach to>", argv[0]);
+    if (argc < 2) {
+        info("Usage: %s config_file <PID to attach to>...<PID to attach to>", argv[0]);
         exit(1);
     }
 
-    if (argc == 3) {
-        targetPID = atoi(argv[2]);
+    if (argc > 2) {
+        for (ssize_t i = 2; i < argc; ++i) {
+            printf("PID argument: %s\n", argv[i]);
+            targetPIDs.push_back(atoi(argv[i]));
+        }
+        targetPID = targetPIDs[0];  // take the first one for now
     }
 
     //Canonicalize paths --- because we change dirs, we deal in absolute paths
@@ -420,7 +426,16 @@ int main(int argc, char *argv[]) {
     pinCmd = new PinCmd(&conf, configFile, outputDir, shmid, targetPID);
     uint32_t numProcs = pinCmd->getNumCmdProcs();
 
+    // TODO this will only run for as many processes as are defined in the .cfg file.
+    // TODO instead, take the max of that and targetPIDs.size()
     for (uint32_t procIdx = 0; procIdx < numProcs; procIdx++) {
+    //for (uint32_t procIdx = 0; procIdx < std::max(numProcs, (uint32_t)targetPIDs.size()); procIdx++) {
+        /*
+        if (procIdx > 0) {
+            targetPID = targetPIDs[procIdx];
+            pinCmd = new PinCmd(&conf, configFile, outputDir, shmid, targetPID);
+        }
+        */
         LaunchProcess(procIdx);
     }
 
@@ -433,7 +448,7 @@ int main(int argc, char *argv[]) {
 
     int64_t lastNumPhases = 0;
 
-    while (getNumChildren() > 0 || ((targetPID != 0) && !shouldTerminate)) {
+    while (getNumChildren() > 0 || ((targetPIDs.size() != 0) && !shouldTerminate)) {
         if (!gm_isready()) {
             usleep(1000);  // wait till proc idx 0 initializes everyhting
             continue;
@@ -481,7 +496,7 @@ int main(int argc, char *argv[]) {
 
         //This solves a weird race in multiprocess where SIGCHLD does not always fire...
         // DEBUG
-        if (targetPID == 0) {
+        if (targetPIDs.size() == 0) {
             int cpid = -1;
             while ((cpid = waitpid(-1, nullptr, WNOHANG)) > 0) {
                 eraseChild(cpid);
