@@ -1,0 +1,75 @@
+sim = {
+    accAvgPowerReport = true;# enable/disable periodic report
+    curAvgPowerReport = true;# enable/disable periodic report
+    bandwidthReport   = true;# enable/disable periodic report
+    addressTrace = false;# enable/disable memory access address trace
+};
+
+mc_spec = {
+    capacityMB = 65536;# Mega Byte
+    channels = 8;
+    channelDataWidth = 64;# bits, power of 2
+    rowBufferPolicy = "close";# "open" or "close"
+    interleaveType = 0;# see ZsimMemBase::ReturnChanel() & MemBaseChanel::AddressMap()
+    powerDownCycle = 60;# proccessor cycles, set 0 if never powerdown.
+    controllerLatency = 48;# processor cycles
+    schedulerQueueCount = 0;# in case of open page policy, the scheduler should be enabled
+    schedulerWaitCycle = 0;# memory cycles
+    accessLogDepth = 3;
+    mergeContinuous = false;
+};
+
+mem_spec = { # per chip
+    #4Gb chip DDR4 MT40A256M16
+    capacityMb  = 2048;# Mega Bit
+    bankCount   = 8;
+    rowAddrWidth = 15;
+    colAddrWidth = 10;
+    dataBusWidth = 16;
+    ddrInterface = true;
+
+    timing = {
+        # nano seconds
+        tCK    = 0.75;
+        tCMD   = 0.75;  # 1*tCK
+        tRC    = 45.5;
+        tRAS   = 32.00;
+        tRCD   = 13.5;
+        tRP    = 13.5;
+        tRPab  = 13.5; # set tRP in DDR3
+        tRTRS  = 0.75;  # Rank to Rank
+        tRRD   = 3.0;  # max(4*tCK, 3.0ns)
+        tWTR   = 7.5;  # max(4*tCK, 7.5ns)
+        tWR    = 15.0;
+        tXP    = 6.0;  # max(4*tCK, 6.0ns)
+        tCAS   = 15.75; # 21*tCK
+        tCWD   = 13.5;  # 18*tCK
+        tCCD   = 5.0;  # max(4*tCK,5.0ns)
+        tREFI  = 7800.0;
+        tRFC   = 260.00;
+        tFAW   = 12.00;
+        tRTP   = 7.5;
+    };
+
+    power = {
+        VDD1 = { #mA
+            VDD1  = 1.2;# V
+            IDD0  = 72.0;
+            IDD2P = 22.0;
+            IDD2N = 42.0;
+            IDD3P = 33.0;
+            IDD3N = 58.0;
+            IDD4R = 255.0;
+            IDD4W = 193.0;
+            IDD5  = 66.0;
+        };
+    
+        pins = { # mW
+            readDQ = 49.4; # read DQ power of whole chip full usage
+            writeDQ = 228.1; # write DQ Terminate power of whole chip full usage
+            readTerm = 202.3; # read Terminate power of whole chip full usage
+            writeTerm = 228.1; # write Terminate power of whole chip full usage
+        };
+    };
+};
+
