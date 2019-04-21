@@ -3,6 +3,7 @@ run/
 build/
 build/opt/
 .vscode/
+.vscode/*
 .*.swp
 */.*.swp
 */*/.*.swp
