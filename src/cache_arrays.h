@@ -36,7 +36,7 @@
 class CacheArray : public GlobAlloc {
     public:
         /* Returns tag's ID if present, -1 otherwise. If updateReplacement is set, call the replacement policy's update() on the line accessed*/
-        virtual int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement) = 0;
+        virtual int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, char* hitType) = 0;
 
         /* Runs replacement scheme, returns tag ID of new pos and address of line to write back*/
         virtual uint32_t preinsert(const Address lineAddr, const MemReq* req, Address* wbLineAddr) = 0;
@@ -49,6 +49,10 @@ class CacheArray : public GlobAlloc {
         virtual void postinsert(const Address lineAddr, const MemReq* req, uint32_t lineId) = 0;
 
         virtual void initStats(AggregateStat* parent) {}
+
+        CacheArray(const bool _hybrid): hybrid(_hybrid) {}
+    protected:
+        bool hybrid;
 };
 
 class ReplPolicy;
@@ -66,9 +70,9 @@ class SetAssocArray : public CacheArray {
         uint32_t setMask;
 
     public:
-        SetAssocArray(uint32_t _numLines, uint32_t _assoc, ReplPolicy* _rp, HashFamily* _hf);
+        SetAssocArray(uint32_t _numLines, uint32_t _assoc, ReplPolicy* _rp, HashFamily* _hf, bool _hybrid);
 
-        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement);
+        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, char* hitType);
         uint32_t preinsert(const Address lineAddr, const MemReq* req, Address* wbLineAddr);
         void postinsert(const Address lineAddr, const MemReq* req, uint32_t candidate);
 };
@@ -95,9 +99,9 @@ class ZArray : public CacheArray {
         Counter statSwaps;
 
     public:
-        ZArray(uint32_t _numLines, uint32_t _ways, uint32_t _candidates, ReplPolicy* _rp, HashFamily* _hf);
+        ZArray(uint32_t _numLines, uint32_t _ways, uint32_t _candidates, ReplPolicy* _rp, HashFamily* _hf, bool _hybrid);
 
-        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement);
+        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, char* hitType);
         uint32_t preinsert(const Address lineAddr, const MemReq* req, Address* wbLineAddr);
         void postinsert(const Address lineAddr, const MemReq* req, uint32_t candidate);
 

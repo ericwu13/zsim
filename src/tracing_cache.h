@@ -36,7 +36,7 @@ class TracingCache : public Cache {
         lock_t traceLock;
 
     public:
-        TracingCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, g_string& _tracefile, g_string& _name);
+        TracingCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, uint32_t _accFastLat, g_string& _tracefile, g_string& _name);
         void setChildren(const g_vector<BaseCache*>& children, Network* network);
         uint64_t access(MemReq& req);
 };

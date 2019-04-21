@@ -1,0 +1,2 @@
+#define ZSIM_BUILDDATE "Sun Apr 21 12:36:01 UTC 2019"
+#define ZSIM_BUILDVERSION "master:117:0c24ba0:18fc 264+ 78- 273a9b74"

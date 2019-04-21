@@ -1,0 +1,2 @@
+file /vagrant/SConstruct,line 150:
+	Configure(confdir = build/opt/.sconf_temp)

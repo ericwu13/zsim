@@ -69,7 +69,7 @@ class IdealLRUArray : public CacheArray {
         CC* cc;
 
     public:
-        explicit IdealLRUArray(uint32_t _numLines) : numLines(_numLines), cc(nullptr) {
+        explicit IdealLRUArray(uint32_t _numLines) : CacheArray(false), numLines(_numLines), cc(nullptr) {
             array = gm_calloc<Entry>(numLines);
             for (uint32_t i = 0; i < numLines; i++) {
                 Entry* e = new (&array[i]) Entry(i);
@@ -78,7 +78,7 @@ class IdealLRUArray : public CacheArray {
             rp = new ProxyReplPolicy(this);
         }
 
-        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement) {
+        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, char* hitType) {
             g_unordered_map<Address, uint32_t>::iterator it = lineMap.find(lineAddr);
             if (it == lineMap.end()) return -1;
 
@@ -247,11 +247,11 @@ class IdealLRUPartArray : public CacheArray {
         uint32_t numLines;
 
     public:
-        IdealLRUPartArray(uint32_t _numLines, IdealLRUPartReplPolicy* _rp) : rp(_rp), numLines(_numLines) {
+        IdealLRUPartArray(uint32_t _numLines, IdealLRUPartReplPolicy* _rp) : CacheArray(false), rp(_rp), numLines(_numLines) {
             lineAddrs = gm_calloc<Address>(numLines);
         }
 
-        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement) {
+        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, char* hitType) {
             g_unordered_map<Address, uint32_t>::iterator it = lineMap.find(lineAddr);
             if (it == lineMap.end()) return -1;
 

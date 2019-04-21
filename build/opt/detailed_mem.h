@@ -1,0 +1,1 @@
+/vagrant/src/detailed_mem.h

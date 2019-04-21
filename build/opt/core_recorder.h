@@ -1,0 +1,1 @@
+/vagrant/src/core_recorder.h
