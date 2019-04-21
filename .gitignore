@@ -1,4 +1,6 @@
-.vagarant/
+.vagrant/
+.vagrant/*
+.*
 run/
 build/
 build/opt/
