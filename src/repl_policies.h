@@ -32,6 +32,7 @@
 #include "coherence_ctrls.h"
 #include "memory_hierarchy.h"
 #include "mtrand.h"
+#include "log.h"
 
 /* Generic replacement policy interface. A replacement policy is initialized by the cache (by calling setTop/BottomCC) and used by the cache array. Usage follows two models:
  * - On lookups, update() is called if the replacement policy is to be updated on a hit
@@ -49,6 +50,7 @@ class ReplPolicy : public GlobAlloc {
 
         virtual void update(uint32_t id, const MemReq* req) = 0;
         virtual void replaced(uint32_t id) = 0;
+        virtual uint64_t getScore(uint32_t id) { return 0; }
 
         virtual uint32_t rankCands(const MemReq* req, SetAssocCands cands) = 0;
         virtual uint32_t rankCands(const MemReq* req, ZCands cands) = 0;
@@ -76,7 +78,7 @@ class ReplPolicy : public GlobAlloc {
 class LegacyReplPolicy : public virtual ReplPolicy {
     protected:
         virtual void startReplacement(const MemReq* req) {} //many policies don't need it
-        virtual void recordCandidate(uint32_t id) = 0;
+        virtual void recordCandidate(uint32_t id) = 0; // get the possible candidate and their score to be replaced
         virtual uint32_t getBestCandidate() = 0;
 
     public:
@@ -119,8 +121,10 @@ class LRUReplPolicy : public ReplPolicy {
         }
 
         template <typename C> inline uint32_t rank(const MemReq* req, C cands) {
+            // choose a best candidate to evict cache line
             uint32_t bestCand = -1;
             uint64_t bestScore = (uint64_t)-1L;
+            // C == candidate, using iterator to wrap up
             for (auto ci = cands.begin(); ci != cands.end(); ci.inc()) {
                 uint32_t s = score(*ci);
                 bestCand = (s < bestScore)? *ci : bestCand;
@@ -132,8 +136,94 @@ class LRUReplPolicy : public ReplPolicy {
         DECL_RANK_BINDINGS;
 
     private:
-        inline uint64_t score(uint32_t id) { //higher is least evictable
-            //array[id] < timestamp always, so this prioritizes by:
+        inline uint64_t score(uint32_t id) { // higher is least evictable
+            // array[id] < timestamp always, so this prioritizes by:
+            // (1) valid (if not valid, it's 0)
+            // (2) sharers, and
+            // (3) timestamp
+            return (sharersAware? cc->numSharers(id) : 0)*timestamp + array[id]*cc->isValid(id);
+        }
+};
+
+template <bool sharersAware>
+class HybridReplPolicy : public LegacyReplPolicy {
+    private:
+        uint64_t timestamp; // incremented on each access
+        uint64_t* array;
+        //read-only
+        uint32_t* candArray;
+        uint32_t* scoreArray;
+        uint32_t numLines;
+        uint32_t numCands;
+
+        //read-write
+        MTRand rnd;
+        uint32_t candVal;
+        uint32_t candIdx;
+
+    public:
+        explicit HybridReplPolicy(uint32_t _numLines, uint32_t _numCands) : numLines(_numLines), numCands(_numCands), rnd(0x23A5F + (uint64_t)this), candIdx(0) {
+            candArray = gm_calloc<uint32_t>(numCands);
+            scoreArray = gm_calloc<uint32_t>(numCands);
+            array = gm_calloc<uint64_t>(numLines);
+        }
+
+        ~HybridReplPolicy() {
+            gm_free(candArray);
+            gm_free(scoreArray);
+            gm_free(array);
+        }
+
+        void update(uint32_t id, const MemReq* req) {
+            // update the targeted line ID to MRU position (in local view)
+            array[id] = timestamp++;
+            #ifdef cacheDEBUG
+            info("Set %d, Update Line ID %d with Score %jd", id/8, id, array[id]);
+            #endif
+        }
+
+        void recordCandidate(uint32_t id) {
+            uint32_t s = score(id);   
+            candArray[candIdx] = id;
+            scoreArray[candIdx] = s;
+            candIdx++;
+        }
+
+        uint32_t getBestCandidate() {
+            uint32_t bestCand = -1;
+            uint64_t bestScore = 0;
+            // get the MRU line ID
+            for (uint32_t i = 0; i < numCands; i++) {
+                #ifdef cacheDEBUG
+                info("Score %d", scoreArray[i]);
+                #endif
+                bestCand = (scoreArray[i] > bestScore)? i : bestCand;
+                bestScore = MAX(scoreArray[i], bestScore);
+            }
+            assert(candIdx == numCands);
+            while(true) {
+                // evict the line ID that is at NMRU position
+                uint32_t idx = rnd.randInt(numCands-1);
+                if(idx != bestCand) {
+                    return candArray[idx];
+                }
+            }
+        }
+
+        uint64_t getScore(uint32_t id) {
+            return score(id);
+        }
+
+        void replaced(uint32_t id) {
+            #ifdef cacheDEBUG
+            info("Set %d, Kick out Line ID %d with Score %jd", id/8, id, array[id]);
+            #endif
+            candIdx = 0;
+            array[id] = 0;
+        }
+        private:
+        inline uint64_t score(uint32_t id) { // higher is least evictable
+            // array[id] < timestamp always, so this prioritizes by:
             // (1) valid (if not valid, it's 0)
             // (2) sharers, and
             // (3) timestamp
@@ -215,7 +305,7 @@ class NRUReplPolicy : public LegacyReplPolicy {
         }
 
         void update(uint32_t id, const MemReq* req) {
-            //if (array[id]) info("update PRE %d %d %d", id, array[id], youngLines);
+            // if (array[id]) info("update PRE %d %d %d", id, array[id], youngLines);
             youngLines += 1 - (array[id] >> 1); //+0 if young, +1 if old
             array[id] |= 0x2;
 
@@ -287,6 +377,8 @@ class RandReplPolicy : public LegacyReplPolicy {
             candIdx = 0;
         }
 };
+
+
 
 class LFUReplPolicy : public LegacyReplPolicy {
     private:

@@ -1,4 +1,9 @@
-./vagarant
-./run
-./build/opt/
-./vscode
+.vagarant/
+run/
+build/
+build/opt/
+.vscode/
+.*.swp
+*/.*.swp
+*/*/.*.swp
+*/*/*/.*.swp

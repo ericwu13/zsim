@@ -210,6 +210,7 @@ class MESITopCC : public GlobAlloc {
 
     public:
         MESITopCC(uint32_t _numLines, bool _nonInclusiveHack) : numLines(_numLines), nonInclusiveHack(_nonInclusiveHack) {
+            // every cache line need a entry to record MESI states
             array = gm_calloc<Entry>(numLines);
             for (uint32_t i = 0; i < numLines; i++) {
                 array[i].clear();

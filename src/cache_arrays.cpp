@@ -26,25 +26,62 @@
 #include "cache_arrays.h"
 #include "hash.h"
 #include "repl_policies.h"
-
+#include "log.h"
 /* Set-associative array implementation */
 
-SetAssocArray::SetAssocArray(uint32_t _numLines, uint32_t _assoc, ReplPolicy* _rp, HashFamily* _hf) : rp(_rp), hf(_hf), numLines(_numLines), assoc(_assoc)  {
+SetAssocArray::SetAssocArray(uint32_t _numLines, uint32_t _assoc, ReplPolicy* _rp, HashFamily* _hf, bool _hybrid) : CacheArray(_hybrid), rp(_rp), hf(_hf), numLines(_numLines), assoc(_assoc)  {
+    // address 8 bytes uint
     array = gm_calloc<Address>(numLines);
     numSets = numLines/assoc;
     setMask = numSets - 1;
     assert_msg(isPow2(numSets), "must have a power of 2 # sets, but you specified %d", numSets);
 }
 
-int32_t SetAssocArray::lookup(const Address lineAddr, const MemReq* req, bool updateReplacement) {
+int32_t SetAssocArray::lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, char* hitType) {
+    // get the set number of line address
     uint32_t set = hf->hash(0, lineAddr) & setMask;
     uint32_t first = set*assoc;
-    for (uint32_t id = first; id < first + assoc; id++) {
-        if (array[id] ==  lineAddr) {
-            if (updateReplacement) rp->update(id, req);
-            return id;
+    // loop through all the ways in the given set
+    if(hybrid) {
+        // check which type of cache hit: MRU, or NMRU
+        int32_t target = -1;
+        uint32_t BestCand = -1;
+        uint64_t BestScore = 0;
+        // find MRU line ID in cache array
+        for (uint32_t id = first; id < first + assoc; id++) {
+            uint64_t tmp = rp->getScore(id);
+            if(tmp > BestScore) {
+                BestCand = id;
+                BestScore = tmp;
+            }
+            if (array[id] ==  lineAddr) {
+                target = id;
+            }
+        }
+        // check if the targeted ID is MRU or not
+        if(target != -1) {
+            if((uint32_t)target == BestCand) {
+                //info("Hit on MRU");
+                *hitType = 'M';
+            } else {
+                //info("Hit on NMRU");
+                *hitType = 'N';
+            }
+            if (updateReplacement) rp->update(target, req);
+            return target;
+        }
+
+    } else {
+        for (uint32_t id = first; id < first + assoc; id++) {
+            // tag match in the set
+            if (array[id] ==  lineAddr) {
+                if (updateReplacement) rp->update(id, req);
+                return id;
+            }
         }
     }
+    // cache miss
+    *hitType = 'S';
     return -1;
 }
 
@@ -67,8 +104,8 @@ void SetAssocArray::postinsert(const Address lineAddr, const MemReq* req, uint32
 
 /* ZCache implementation */
 
-ZArray::ZArray(uint32_t _numLines, uint32_t _ways, uint32_t _candidates, ReplPolicy* _rp, HashFamily* _hf) //(int _size, int _lineSize, int _assoc, int _zassoc, ReplacementPolicy<T>* _rp, int _hashType)
-    : rp(_rp), hf(_hf), numLines(_numLines), ways(_ways), cands(_candidates)
+ZArray::ZArray(uint32_t _numLines, uint32_t _ways, uint32_t _candidates, ReplPolicy* _rp, HashFamily* _hf, bool _hybrid) //(int _size, int _lineSize, int _assoc, int _zassoc, ReplacementPolicy<T>* _rp, int _hashType)
+    : CacheArray(_hybrid), rp(_rp), hf(_hf), numLines(_numLines), ways(_ways), cands(_candidates)
 {
     assert_msg(ways > 1, "zcaches need >=2 ways to work");
     assert_msg(cands >= ways, "candidates < ways does not make sense in a zcache");
@@ -95,7 +132,7 @@ void ZArray::initStats(AggregateStat* parentStat) {
     parentStat->append(objStats);
 }
 
-int32_t ZArray::lookup(const Address lineAddr, const MemReq* req, bool updateReplacement) {
+int32_t ZArray::lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, char* hitType) {
     /* Be defensive: If the line is 0, panic instead of asserting. Now this can
      * only happen on a segfault in the main program, but when we move to full
      * system, phy page 0 might be used, and this will hit us in a very subtle
