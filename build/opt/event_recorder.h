@@ -1,1 +1,0 @@
-/vagrant/src/event_recorder.h

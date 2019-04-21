@@ -1,1 +1,0 @@
-/vagrant/src/log.h

@@ -30,9 +30,8 @@
 #include "timing_event.h"
 #include "zsim.h"
 
-#include <string.h>
-Cache::Cache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, uint32_t _accFastLat, const g_string& _name)
-    : cc(_cc), array(_array), rp(_rp), numLines(_numLines), accLat(_accLat), invLat(_invLat), accFastLat(_accFastLat), name(_name) {}
+Cache::Cache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, const g_string& _name)
+    : cc(_cc), array(_array), rp(_rp), numLines(_numLines), accLat(_accLat), invLat(_invLat), name(_name) {}
 
 const char* Cache::getName() {
     return name.c_str();
@@ -60,41 +59,17 @@ void Cache::initCacheStats(AggregateStat* cacheStat) {
 }
 
 uint64_t Cache::access(MemReq& req) {
-    #ifdef cacheDEBUG
-    if(!strncmp(getName(),"l2", 2)) {
-        info("---------");
-    }
-    #endif
     uint64_t respCycle = req.cycle;
-    char hitType = 'S';
     bool skipAccess = cc->startAccess(req); //may need to skip access due to races (NOTE: may change req.type!)
     if (likely(!skipAccess)) {
         bool updateReplacement = (req.type == GETS) || (req.type == GETX);
-        int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement, &hitType);
-        #ifdef cacheDEBUG
-        if(!strncmp(getName(),"l2", 2)) {
-            uint32_t numSets = numLines / 8;
-            uint32_t set = req.lineAddr & (numSets - 1);
-            if(lineId != -1) {
-                info("Set %d, Lind ID %d, Cache hit: 0x%jx", set, lineId, req.lineAddr);
-            } else {
-                info("Set %d, Cache miss: 0x%jx", set, req.lineAddr);
-            }
-        }
-        #endif
-        // access latency
-        if(hitType == 'M') {
-            respCycle += accFastLat;
-            info("FAST");
-        } else {
-            respCycle += accLat;
-            info("NORM");
-        }
+        int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
+        respCycle += accLat;
 
         if (lineId == -1 && cc->shouldAllocate(req)) {
             //Make space for new line
             Address wbLineAddr;
-            lineId = array->preinsert(req.lineAddr, &req, &wbLineAddr); //find the lineId (block index) to replace
+            lineId = array->preinsert(req.lineAddr, &req, &wbLineAddr); //find the lineId to replace
             trace(Cache, "[%s] Evicting 0x%lx", name.c_str(), wbLineAddr);
 
             //Evictions are not in the critical path in any sane implementation -- we do not include their delays
@@ -102,13 +77,6 @@ uint64_t Cache::access(MemReq& req) {
             cc->processEviction(req, wbLineAddr, lineId, respCycle); //1. if needed, send invalidates/downgrades to lower level
 
             array->postinsert(req.lineAddr, &req, lineId); //do the actual insertion. NOTE: Now we must split insert into a 2-phase thing because cc unlocks us.
-#ifdef cacheDEBUG
-            if(!strncmp(getName(),"l2", 2)) {
-                uint32_t numSets = numLines / 8;
-                uint32_t set = wbLineAddr & (numSets - 1);
-                info("Set %d, Evicting 0x%lx", set, wbLineAddr);
-            }
-#endif
         }
         // Enforce single-record invariant: Writeback access may have a timing
         // record. If so, read it.
@@ -162,8 +130,7 @@ void Cache::startInvalidate() {
 }
 
 uint64_t Cache::finishInvalidate(const InvReq& req) {
-    char hitType = 'S';
-    int32_t lineId = array->lookup(req.lineAddr, nullptr, false, &hitType);
+    int32_t lineId = array->lookup(req.lineAddr, nullptr, false);
     assert_msg(lineId != -1, "[%s] Invalidate on non-existing address 0x%lx type %s lineId %d, reqWriteback %d", name.c_str(), req.lineAddr, InvTypeName(req.type), lineId, *req.writeback);
     uint64_t respCycle = req.cycle + invLat;
     trace(Cache, "[%s] Invalidate start 0x%lx type %s lineId %d, reqWriteback %d", name.c_str(), req.lineAddr, InvTypeName(req.type), lineId, *req.writeback);

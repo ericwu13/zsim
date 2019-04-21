@@ -1,1 +1,0 @@
-/vagrant/src/utility_monitor.h

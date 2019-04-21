@@ -26,8 +26,8 @@
 #include "tracing_cache.h"
 #include "zsim.h"
 
-TracingCache::TracingCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, uint32_t _accFastLat, g_string& _tracefile, g_string& _name) :
-    Cache(_numLines, _cc, _array, _rp, _accLat, _invLat, _accFastLat, _name), tracefile(_tracefile)
+TracingCache::TracingCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, g_string& _tracefile, g_string& _name) :
+    Cache(_numLines, _cc, _array, _rp, _accLat, _invLat, _name), tracefile(_tracefile)
 {
     futex_init(&traceLock);
 }

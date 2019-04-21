@@ -63,8 +63,8 @@ class FilterCache : public Cache {
 
     public:
         FilterCache(uint32_t _numSets, uint32_t _numLines, CC* _cc, CacheArray* _array,
-                ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, uint32_t _accFastLat, g_string& _name)
-            : Cache(_numLines, _cc, _array, _rp, _accLat, _invLat, _accFastLat, _name)
+                ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, g_string& _name)
+            : Cache(_numLines, _cc, _array, _rp, _accLat, _invLat, _name)
         {
             numSets = _numSets;
             setMask = numSets - 1;

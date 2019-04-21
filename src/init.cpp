@@ -101,7 +101,7 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     uint32_t numHashes = 1;
     uint32_t ways = config.get<uint32_t>(prefix + "array.ways", 4);
     string arrayType = config.get<const char*>(prefix + "array.type", "SetAssoc");
-    uint32_t candidates = (arrayType == "Z")? config.get<uint32_t>(prefix + "array.candidates", 16) : ways; // number of replaced candidates
+    uint32_t candidates = (arrayType == "Z")? config.get<uint32_t>(prefix + "array.candidates", 16) : ways;
 
     //Need to know number of hash functions before instantiating array
     if (arrayType == "SetAssoc") {
@@ -164,13 +164,6 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
         rp = new NRUReplPolicy(numLines, candidates);
     } else if (replType == "Rand") {
         rp = new RandReplPolicy(candidates);
-    } else if (replType == "Hybrid") {
-        bool sharersAware = !isTerminal;
-        if (sharersAware) {
-            rp = new HybridReplPolicy<true>(numLines, candidates);
-        } else {
-            rp = new HybridReplPolicy<false>(numLines, candidates);
-        }
     } else if (replType == "WayPart" || replType == "Vantage" || replType == "IdealLRUPart") {
         if (replType == "WayPart" && arrayType != "SetAssoc") panic("WayPart replacement requires SetAssoc array");
 
@@ -238,11 +231,10 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
 
     //Alright, build the array
     CacheArray* array = nullptr;
-    bool hybrid = (replType == "Hybrid")? 1 : 0;
     if (arrayType == "SetAssoc") {
-        array = new SetAssocArray(numLines, ways, rp, hf, hybrid);
+        array = new SetAssocArray(numLines, ways, rp, hf);
     } else if (arrayType == "Z") {
-        array = new ZArray(numLines, ways, candidates, rp, hf, hybrid);
+        array = new ZArray(numLines, ways, candidates, rp, hf);
     } else if (arrayType == "IdealLRU") {
         assert(replType == "LRU");
         assert(!hf);
@@ -263,10 +255,6 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     uint32_t accLat = (isTerminal)? 0 : latency; //terminal caches has no access latency b/c it is assumed accLat is hidden by the pipeline
     uint32_t invLat = latency;
 
-    // my modification
-    uint32_t fastLatency = config.get<uint32_t>(prefix + "fastLatency", latency);
-    uint32_t accFastLat = (isTerminal)? 0 : fastLatency;
-
     // Inclusion?
     bool nonInclusiveHack = config.get<bool>(prefix + "nonInclusiveHack", false);
     if (nonInclusiveHack) assert(type == "Simple" && !isTerminal);
@@ -282,18 +270,16 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     rp->setCC(cc);
     if (!isTerminal) {
         if (type == "Simple") {
-            // cache = new Cache(numLines, cc, array, rp, accLat, invLat, name);
-            // my modification
-            cache = new Cache(numLines, cc, array, rp, accLat, invLat, accFastLat, name);
+            cache = new Cache(numLines, cc, array, rp, accLat, invLat, name);
         } else if (type == "Timing") {
             uint32_t mshrs = config.get<uint32_t>(prefix + "mshrs", 16);
             uint32_t tagLat = config.get<uint32_t>(prefix + "tagLat", 5);
             uint32_t timingCandidates = config.get<uint32_t>(prefix + "timingCandidates", candidates);
-            cache = new TimingCache(numLines, cc, array, rp, accLat, invLat, accFastLat, mshrs, tagLat, ways, timingCandidates, domain, name);
+            cache = new TimingCache(numLines, cc, array, rp, accLat, invLat, mshrs, tagLat, ways, timingCandidates, domain, name);
         } else if (type == "Tracing") {
             g_string traceFile = config.get<const char*>(prefix + "traceFile","");
             if (traceFile.empty()) traceFile = g_string(zinfo->outputDir) + "/" + name + ".trace";
-            cache = new TracingCache(numLines, cc, array, rp, accLat, invLat, accFastLat, traceFile, name);
+            cache = new TracingCache(numLines, cc, array, rp, accLat, invLat, traceFile, name);
         } else {
             panic("Invalid cache type %s", type.c_str());
         }
@@ -301,14 +287,12 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
         //Filter cache optimization
         if (type != "Simple") panic("Terminal cache %s can only have type == Simple", name.c_str());
         if (arrayType != "SetAssoc" || hashType != "None" || replType != "LRU") panic("Invalid FilterCache config %s", name.c_str());
-        // cache = new FilterCache(numSets, numLines, cc, array, rp, accLat, invLat, name);
-        // my modification
-        cache = new FilterCache(numSets, numLines, cc, array, rp, accLat, invLat, accFastLat, name);
+        cache = new FilterCache(numSets, numLines, cc, array, rp, accLat, invLat, name);
     }
 
 #if 0
-    info("Built %s bank, %d bytes, %d lines, %d ways (%d candidates if array is Z), %s array, %s hash, %s replacement, accLat %d, invLat %d name %s",
-            name.c_str(), bankSize, numLines, ways, candidates, arrayType.c_str(), hashType.c_str(), replType.c_str(), accLat, invLat, name.c_str());
+    info("Built L%d bank, %d bytes, %d lines, %d ways (%d candidates if array is Z), %s array, %s hash, %s replacement, accLat %d, invLat %d name %s",
+            level, bankSize, numLines, ways, candidates, arrayType.c_str(), hashType.c_str(), replType.c_str(), accLat, invLat, name.c_str());
 #endif
 
     return cache;
@@ -480,14 +464,13 @@ static void InitSystem(Config& config) {
         if (!found) panic("%s has invalid child %s", it.second.c_str(), it.first.c_str());
     }
 
-    // Get the (single) LLC (low-level cache)
+    // Get the (single) LLC
     vector<string> parentlessCacheGroups;
     for (auto& it : childMap) if (!parentMap.count(it.first)) parentlessCacheGroups.push_back(it.first);
     if (parentlessCacheGroups.size() != 1) panic("Only one last-level cache allowed, found: %s", Str(parentlessCacheGroups).c_str());
     string llc = parentlessCacheGroups[0];
 
     auto isTerminal = [&](string group) -> bool {
-        // If the group has no child, it is the end of the cache
         return childMap[group].size() == 0;
     };
 
@@ -541,7 +524,6 @@ static void InitSystem(Config& config) {
     // mem to llc is a bit special, only one llc
     uint32_t childId = 0;
     for (BaseCache* llcBank : (*cMap[llc])[0]) {
-        // set parents for every child
         llcBank->setParents(childId++, mems, network);
     }
 

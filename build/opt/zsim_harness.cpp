@@ -1,1 +1,0 @@
-/vagrant/src/zsim_harness.cpp

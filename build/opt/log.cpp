@@ -1,1 +1,0 @@
-/vagrant/src/log.cpp

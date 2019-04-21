@@ -1,1 +1,0 @@
-/vagrant/src/virt/cpu.cpp
