@@ -1,4 +1,4 @@
-.vagrant/
+.vagarant/
 run/
 build/
 build/opt/
@@ -8,4 +8,3 @@ build/opt/
 */.*.swp
 */*/.*.swp
 */*/*/.*.swp
-.*

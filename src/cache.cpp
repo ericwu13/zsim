@@ -85,10 +85,10 @@ uint64_t Cache::access(MemReq& req) {
         // access latency
         if(hitType == 'M') {
             respCycle += accFastLat;
-            //info("FAST");
+            info("FAST");
         } else {
             respCycle += accLat;
-            //info("NORM");
+            info("NORM");
         }
 
         if (lineId == -1 && cc->shouldAllocate(req)) {
