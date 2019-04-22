@@ -6,8 +6,11 @@ run/*
 
 build/*
 build/opt/*
+
 .vscode/
 .vscode/*
+
+log*
 
 .*
 */.*
