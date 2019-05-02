@@ -187,6 +187,10 @@ class HybridReplPolicy : public LegacyReplPolicy {
             candArray[candIdx] = id;
             scoreArray[candIdx] = s;
             candIdx++;
+            #ifdef cacheDEBUG
+            info("Score %d", s);
+            info("Num of Sharers %d", cc->numSharers(id));
+            #endif
         }
 
         uint32_t getBestCandidate() {
@@ -194,9 +198,6 @@ class HybridReplPolicy : public LegacyReplPolicy {
             uint64_t bestScore = 0;
             // get the MRU line ID
             for (uint32_t i = 0; i < numCands; i++) {
-                #ifdef cacheDEBUG
-                info("Score %d", scoreArray[i]);
-                #endif
                 bestCand = (scoreArray[i] > bestScore)? i : bestCand;
                 bestScore = MAX(scoreArray[i], bestScore);
             }

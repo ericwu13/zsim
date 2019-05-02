@@ -61,10 +61,14 @@ int32_t SetAssocArray::lookup(const Address lineAddr, const MemReq* req, bool up
         // check if the targeted ID is MRU or not
         if(target != -1) {
             if((uint32_t)target == BestCand) {
-                //info("Hit on MRU");
+                #ifdef cacheDEBUG
+                info("Hit on MRU (%d)", req->type);
+                #endif
                 *hitType = 'M';
             } else {
-                //info("Hit on NMRU");
+                #ifdef cacheDEBUG
+                info("Hit on NMRU (%d)", req->type);
+                #endif
                 *hitType = 'N';
             }
             if (updateReplacement) rp->update(target, req);

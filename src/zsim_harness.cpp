@@ -404,11 +404,24 @@ int main(int argc, char *argv[]) {
 
     int64_t lastNumPhases = 0;
 
+    #ifdef redirectDEBUG
+    info("Getting Children (%d)....", getNumChildren());
+    #endif
+
     while (getNumChildren() > 0) {
         if (!gm_isready()) {
+            #ifdef redirectDEBUG
+            info("GM not ready");
+            #endif
             usleep(1000);  // wait till proc idx 0 initializes everyhting
+            #ifdef redirectDEBUG
+            info("Sleep");
+            #endif
             continue;
         }
+        #ifdef redirectDEBUG
+        info("Ready!!");
+        #endif
 
         if (zinfo == nullptr) {
             zinfo = static_cast<GlobSimInfo*>(gm_get_glob_ptr());

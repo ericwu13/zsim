@@ -51,6 +51,7 @@ void __log_unlock();
 
 /* my definition */
 //#define cacheDEBUG
+//#define redirectDEBUG
 
 typedef enum {
     LOG_Harness,

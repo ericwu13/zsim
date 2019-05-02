@@ -52,6 +52,9 @@ l2_latency = np.sum(dset[-1]['l2']['latGETnl'])
 print "L2 Latency in all banks", 
 print l2_latency
 
+l1d_latency = np.sum(dset[-1]['l1d'][0]['latGETnl'])
+print "L1D Latency", 
+print l1d_latency
 # Total number of instructions executed, counted by adding per-core counts
 # (you could also look at procInstrs)
 totalInstrs = np.sum(dset[-1]['cortex']['instrs'])
