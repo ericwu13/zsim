@@ -30,8 +30,8 @@
 #include "timing_event.h"
 #include "zsim.h"
 
-Cache::Cache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accWrLat, uint32_t _invLat, const g_string& _name)
-    : cc(_cc), array(_array), rp(_rp), numLines(_numLines), accLat(_accLat), accWrLat(_accWrLat), invLat(_invLat), name(_name) {}
+Cache::Cache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accFastLat, uint32_t _accWrLat, uint32_t _invLat, const g_string& _name)
+    : cc(_cc), array(_array), rp(_rp), numLines(_numLines), accLat(_accLat), accFastLat(_accFastLat), accWrLat(_accWrLat), invLat(_invLat), name(_name) {}
 
 const char* Cache::getName() {
     return name.c_str();

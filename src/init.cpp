@@ -252,8 +252,11 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
 
     //Latency
     uint32_t latency = config.get<uint32_t>(prefix + "latency", 10);
+    uint32_t fastLatency = config.get<uint32_t>(prefix + "fastLatency", latency);
     uint32_t wrLatency = config.get<uint32_t>(prefix + "wrLatency", latency);
+
     uint32_t accLat = (isTerminal)? 0 : latency; //terminal caches has no access latency b/c it is assumed accLat is hidden by the pipeline
+    uint32_t accFastLat = (isTerminal)? 0 : fastLatency; //terminal caches has no access latency b/c it is assumed accLat is hidden by the pipeline
     uint32_t accWrLat = (isTerminal)? 0 : wrLatency;
     uint32_t invLat = latency;
 
@@ -272,7 +275,7 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     rp->setCC(cc);
     if (!isTerminal) {
         if (type == "Simple") {
-            cache = new Cache(numLines, cc, array, rp, accLat, accWrLat, invLat, name);
+            cache = new Cache(numLines, cc, array, rp, accLat, accFastLat, accWrLat, invLat, name);
         } else if (type == "Timing") {
             uint32_t mshrs = config.get<uint32_t>(prefix + "mshrs", 16);
             uint32_t tagLat = config.get<uint32_t>(prefix + "tagLat", 5);
