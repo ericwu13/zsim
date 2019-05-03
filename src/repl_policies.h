@@ -54,6 +54,8 @@ class ReplPolicy : public GlobAlloc {
         virtual uint32_t rankCands(const MemReq* req, ZCands cands) = 0;
 
         virtual void initStats(AggregateStat* parent) {}
+
+        virtual bool isMRU(int32_t lineId) { return false; }
 };
 
 /* Add DECL_RANK_BINDINGS to each class that implements the new interface,
@@ -91,7 +93,7 @@ class LegacyReplPolicy : public virtual ReplPolicy {
         DECL_RANK_BINDINGS;
 };
 
-/* Plain ol' LRU, though this one is sharers-aware, prioritizing lines that have
+/* Plain ol' LRUPlain ol' LRU,, though this one is sharers-aware, prioritizing lines that have
  * sharers down in the hierarchy vs lines not shared by anyone.
  */
 template <bool sharersAware>
@@ -138,6 +140,79 @@ class LRUReplPolicy : public ReplPolicy {
             // (2) sharers, and
             // (3) timestamp
             return (sharersAware? cc->numSharers(id) : 0)*timestamp + array[id]*cc->isValid(id);
+        }
+};
+
+class NMRUReplPolicy : public LegacyReplPolicy {
+    protected:
+        bool* array;
+        uint32_t numLines;
+        uint32_t assoc;
+        uint32_t numCands;
+        MTRand rnd;
+
+        uint32_t* candArray;
+        uint32_t candIdx;
+
+    public:
+        explicit NMRUReplPolicy(uint32_t _numLines, uint32_t _assoc) : numLines(_numLines), assoc(_assoc), numCands(_assoc-1), rnd(0x23A5F + (uint64_t)this), candIdx(0) {
+            array = gm_calloc<bool>(numLines);
+            candArray = gm_calloc<uint32_t>(numCands);
+            for(uint32_t i = 0; i < numLines; ++i) {
+                array[i] = false;
+            }
+        }
+        ~NMRUReplPolicy() {
+            gm_free(array);
+        }
+
+        void recordCandidate(uint32_t id) {
+            // MRU cannot be replaced candidate
+            if (array[id] == true || candIdx == numCands) return;
+            #ifdef cacheDEBUG
+            info("candIdx %d, Candidate %d, Position %d", candIdx, id, array[id]);
+            #endif
+            candArray[candIdx++] = id;
+        }
+
+        uint32_t getBestCandidate() {
+            assert(candIdx == numCands);
+            uint32_t idx = rnd.randInt(numCands-1);
+            #ifdef cacheDEBUG
+            info("Best candIdx %d, Line ID %d", idx, candArray[idx]);
+            #endif
+            return candArray[idx];
+        }
+
+        void update(uint32_t id, const MemReq* req) {
+            if (isMRU(id)) return;
+            else {
+                uint32_t set = id / assoc;
+                for (uint32_t i = set*assoc; i < set*assoc + assoc; ++i) {
+                    if(array[i] == true) {
+                        array[i] = false;
+                        #ifdef cacheDEBUG
+                        info("Set %d, Demote Line ID %d Position %d", set, i, array[i]);
+                        #endif
+                        break;
+                    }
+                }
+                array[id] = true;
+                #ifdef cacheDEBUG
+                info("Set %d, Promote Line ID %d Position %d", set, id, array[id]);
+                #endif
+            }
+        }
+        void replaced(uint32_t id) {
+            #ifdef cacheDEBUG
+            info("Set %d, Kick out Line ID %d Position %d", id/8, id, array[id]);
+            #endif
+            candIdx = 0;
+        }
+
+        bool isMRU(int32_t lineId) {
+            if(lineId == -1) return false;
+            return array[lineId];
         }
 };
 
