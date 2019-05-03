@@ -37,7 +37,7 @@ class Network;
  */
 class HybridCache: public Cache {
     public:
-        HybridCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accFastLat, uint32_t _accWrLat, uint32_t _invLat, const g_string& _name);
+        HybridCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accSlowLat, uint32_t _accWrLat, uint32_t _invLat, const g_string& _name);
         uint64_t access(MemReq& req);
 };
 

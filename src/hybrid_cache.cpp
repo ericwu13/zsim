@@ -29,18 +29,39 @@
 #include "timing_event.h"
 #include "zsim.h"
 
-HybridCache::HybridCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accFastLat, uint32_t _accWrLat, uint32_t _invLat, const g_string& _name)
-    : Cache(_numLines, _cc, _array, _rp, _accLat, _accFastLat, _accWrLat, _invLat, _name) {}
+HybridCache::HybridCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accSlowLat, uint32_t _accWrLat, uint32_t _invLat, const g_string& _name)
+    : Cache(_numLines, _cc, _array, _rp, _accLat, _accSlowLat, _accWrLat, _invLat, _name) {}
 
 uint64_t HybridCache::access(MemReq& req) {
+    #ifdef cacheDEBUG
+    if(!strncmp(getName(),"l2", 2)) {
+        info("---------");
+    }
+    #endif
     uint64_t respCycle = req.cycle;
     bool skipAccess = cc->startAccess(req); //may need to skip access due to races (NOTE: may change req.type!)
     if (likely(!skipAccess)) {
         bool updateReplacement = (req.type == GETS) || (req.type == GETX);
         int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
+        bool isMRU = rp->isMRU(lineId);
+        #ifdef cacheDEBUG
+        if(!strncmp(getName(),"l2", 2)) {
+            uint32_t numSets = numLines / 8;
+            uint32_t set = req.lineAddr & (numSets - 1);
+            if(lineId != -1) {
+                info("Set %d, Lind ID %d, Cache hit: 0x%jx", set, lineId, req.lineAddr);
+            } else {
+                info("Set %d, Cache miss: 0x%jx", set, req.lineAddr);
+            }
+        }
+        #endif
 
         if (req.type == GETS || req.type == GETX) {
-            respCycle += accLat;
+            if (isMRU) {
+                respCycle += accLat;
+            } else {
+                respCycle += accSlowLat;
+            }
         }
         else {
             respCycle += accWrLat;
@@ -57,6 +78,13 @@ uint64_t HybridCache::access(MemReq& req) {
             cc->processEviction(req, wbLineAddr, lineId, respCycle); //1. if needed, send invalidates/downgrades to lower level
 
             array->postinsert(req.lineAddr, &req, lineId); //do the actual insertion. NOTE: Now we must split insert into a 2-phase thing because cc unlocks us.
+            #ifdef cacheDEBUG
+            if(!strncmp(getName(),"l2", 2)) {
+                uint32_t numSets = numLines / 8;
+                uint32_t set = wbLineAddr & (numSets - 1);
+                info("Set %d, Evicting 0x%lx", set, wbLineAddr);
+            }
+            #endif
         }
         // Enforce single-record invariant: Writeback access may have a timing
         // record. If so, read it.

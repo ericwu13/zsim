@@ -49,6 +49,8 @@ void __log_unlock();
 #define likely(x)       __builtin_expect((x), 1)
 #define unlikely(x)     __builtin_expect((x), 0)
 
+#define cacheDEBUG
+
 typedef enum {
     LOG_Harness,
     LOG_Config,
