@@ -57,11 +57,11 @@ print "L1D Latency",
 print l1d_latency
 # Total number of instructions executed, counted by adding per-core counts
 # (you could also look at procInstrs)
-totalInstrs = np.sum(dset[-1]['cortex']['instrs'])
+totalInstrs = np.sum(dset[-1]['simpleCore']['instrs'])
 print "Total Instructon Counts: ",
 print totalInstrs
 
-totalCycle = np.sum(dset[-1]['cortex']['cycles'])
+totalCycle = np.sum(dset[-1]['simpleCore']['cycles'])
 print "Total Cycle Counts: ",
 print totalCycle
 
