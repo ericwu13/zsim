@@ -75,6 +75,8 @@
 #include "weave_md1_mem.h" //validation, could be taken out...
 #include "zsim.h"
 
+#include "hybrid_cache.h"
+
 extern void EndOfPhaseActions(); //in zsim.cpp
 
 /* zsim should be initialized in a deterministic and logical order, to avoid re-reading config vars
@@ -275,7 +277,9 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     rp->setCC(cc);
     if (!isTerminal) {
         if (type == "Simple") {
-            cache = new Cache(numLines, cc, array, rp, accLat, accFastLat, accWrLat, invLat, name);
+            cache = new Cache(numLines, cc, array, rp, accLat, accLat, accWrLat, invLat, name);
+        } else if (type == "Hybrid") {
+            cache = new HybridCache(numLines, cc, array, rp, accLat, accFastLat, accWrLat, invLat, name);
         } else if (type == "Timing") {
             uint32_t mshrs = config.get<uint32_t>(prefix + "mshrs", 16);
             uint32_t tagLat = config.get<uint32_t>(prefix + "tagLat", 5);
