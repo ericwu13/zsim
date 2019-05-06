@@ -29,8 +29,8 @@
 #include "timing_event.h"
 #include "zsim.h"
 
-HybridCache::HybridCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accSlowLat, uint32_t _accWrLat, uint32_t _invLat, const g_string& _name)
-    : Cache(_numLines, _cc, _array, _rp, _accLat, _accSlowLat, _accWrLat, _invLat, _name) {}
+HybridCache::HybridCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accSlowLat, uint32_t _accWrLat, uint32_t _accSlowWrLat, uint32_t _invLat, const g_string& _name)
+    : Cache(_numLines, _cc, _array, _rp, _accLat, _accSlowLat, _accWrLat, _accSlowWrLat, _invLat, _name) {}
 
 uint64_t HybridCache::access(MemReq& req) {
     #ifdef cacheDEBUG
@@ -64,7 +64,11 @@ uint64_t HybridCache::access(MemReq& req) {
             }
         }
         else {
-            respCycle += accWrLat;
+            if (isMRU) {
+                respCycle += accWrLat;
+            } else {
+                respCycle += accSlowWrLat;
+            }
         }
 
         if (lineId == -1 && cc->shouldAllocate(req)) {

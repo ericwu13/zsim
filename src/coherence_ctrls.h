@@ -326,6 +326,7 @@ class MESICC : public CC {
 
         bool shouldAllocate(const MemReq& req) {
             if ((req.type == GETS) || (req.type == GETX)) {
+                // allocate space for incoming line
                 return true;
             } else {
                 assert((req.type == PUTS) || (req.type == PUTX));

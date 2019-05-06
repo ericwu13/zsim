@@ -258,10 +258,12 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     uint32_t latency = config.get<uint32_t>(prefix + "latency", 10);
     uint32_t slowLatency = config.get<uint32_t>(prefix + "slowLatency", latency);
     uint32_t wrLatency = config.get<uint32_t>(prefix + "wrLatency", latency);
+    uint32_t slowWrLatency = config.get<uint32_t>(prefix + "slowWrLatency", wrLatency);
 
     uint32_t accLat = (isTerminal)? 0 : latency; //terminal caches has no access latency b/c it is assumed accLat is hidden by the pipeline
     uint32_t accSlowLat = (isTerminal)? 0 : slowLatency; //terminal caches has no access latency b/c it is assumed accLat is hidden by the pipeline
     uint32_t accWrLat = (isTerminal)? 0 : wrLatency;
+    uint32_t accSlowWrLat = (isTerminal)? 0 : slowWrLatency;
     uint32_t invLat = latency;
 
     // Inclusion?
@@ -279,9 +281,9 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     rp->setCC(cc);
     if (!isTerminal) {
         if (type == "Simple") {
-            cache = new Cache(numLines, cc, array, rp, accLat, accLat, accWrLat, invLat, name);
+            cache = new Cache(numLines, cc, array, rp, accLat, accLat, accWrLat, accWrLat, invLat, name);
         } else if (type == "Hybrid") {
-            cache = new HybridCache(numLines, cc, array, rp, accLat, accSlowLat, accWrLat, invLat, name);
+            cache = new HybridCache(numLines, cc, array, rp, accLat, accSlowLat, accWrLat, accSlowWrLat, invLat, name);
         } else if (type == "Timing") {
             uint32_t mshrs = config.get<uint32_t>(prefix + "mshrs", 16);
             uint32_t tagLat = config.get<uint32_t>(prefix + "tagLat", 5);

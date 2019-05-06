@@ -80,7 +80,7 @@ class ReplAccessEvent : public TimingEvent {
 
 TimingCache::TimingCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp,
         uint32_t _accLat, uint32_t _invLat, uint32_t mshrs, uint32_t _tagLat, uint32_t _ways, uint32_t _cands, uint32_t _domain, const g_string& _name)
-    : Cache(_numLines, _cc, _array, _rp, _accLat, _accLat, _accLat, _invLat, _name), numMSHRs(mshrs), tagLat(_tagLat), ways(_ways), cands(_cands)
+    : Cache(_numLines, _cc, _array, _rp, _accLat, _accLat, _accLat, _accLat, _invLat, _name), numMSHRs(mshrs), tagLat(_tagLat), ways(_ways), cands(_cands)
 {
     lastFreeCycle = 0;
     lastAccCycle = 0;
