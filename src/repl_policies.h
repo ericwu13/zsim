@@ -56,6 +56,7 @@ class ReplPolicy : public GlobAlloc {
         virtual void initStats(AggregateStat* parent) {}
 
         virtual bool isMRU(int32_t lineId) { return false; }
+        virtual bool isMRUDirty() { return false; }
 };
 
 /* Add DECL_RANK_BINDINGS to each class that implements the new interface,
@@ -153,10 +154,14 @@ class NMRUReplPolicy : public LegacyReplPolicy {
 
         uint32_t* candArray;
         uint32_t candIdx;
+        bool isMiss;
+        bool MRUDirty;
 
     public:
         explicit NMRUReplPolicy(uint32_t _numLines, uint32_t _assoc) : numLines(_numLines), assoc(_assoc), numCands(_assoc-1), rnd(0x23A5F + (uint64_t)this), candIdx(0) {
             array = gm_calloc<bool>(numLines);
+            isMiss = false;
+            MRUDirty= false;
             candArray = gm_calloc<uint32_t>(numCands);
             for(uint32_t i = 0; i < numLines; ++i) {
                 array[i] = false;
@@ -185,34 +190,73 @@ class NMRUReplPolicy : public LegacyReplPolicy {
         }
 
         void update(uint32_t id, const MemReq* req) {
+            // miss update or hit update
+            MRUDirty = false;
             if (isMRU(id)) return;
             else {
                 uint32_t set = id / assoc;
+                uint32_t mruIdx = 0;
                 for (uint32_t i = set*assoc; i < set*assoc + assoc; ++i) {
                     if(array[i] == true) {
-                        array[i] = false;
-                        #ifdef cacheDEBUG
-                        info("Set %d, Demote Line ID %d Position %d", set, i, array[i]);
-                        #endif
+                        // get MRU index
+                        mruIdx = i;
                         break;
                     }
                 }
-                array[id] = true;
-                #ifdef cacheDEBUG
-                info("Set %d, Promote Line ID %d Position %d", set, id, array[id]);
-                #endif
+                if(isMiss) {
+                    #ifdef cacheDEBUG
+                    info("Set %d, Promote Line ID %d Position %d", set, id, array[id]);
+                    info("Set %d, Demote Line ID %d Position %d", set, mruIdx, array[mruIdx]);
+                    #endif
+                    isMiss = false;
+                    array[mruIdx] = false;
+                    array[id] = true;
+                    return;
+                } else if(req->type == GETS || req->type == GETX) {
+                    // if request is read, we don't promote anything
+                    #ifdef cacheDEBUG
+                    info("Set %d, Untouched Line ID %d Position %d", set, id, array[id]);
+                    #endif
+                    array[id] = false;
+                    return;
+                } else {
+                    // if request is write, we need to promite it to SRAM
+                    if(cc->isDirty(mruIdx)) {
+                        // write to NMRU
+                        #ifdef cacheDEBUG
+                        info("Set %d, Untouched Line ID %d Position %d", set, id, array[id]);
+                        #endif
+                        array[id] = false;
+                        MRUDirty = true;
+                    } else {
+                        // write to MRU
+                        #ifdef cacheDEBUG
+                        info("Set %d, Promote Line ID %d Position %d", set, id, array[id]);
+                        info("Set %d, Demote Line ID %d Position %d", set, mruIdx, array[mruIdx]);
+                        #endif
+                        array[mruIdx] = false;
+                        array[id] = true;
+                    }
+                    return;
+                }
             }
         }
         void replaced(uint32_t id) {
             #ifdef cacheDEBUG
             info("Set %d, Kick out Line ID %d Position %d", id/8, id, array[id]);
             #endif
+            array[id] = false;
             candIdx = 0;
+            isMiss = true;
         }
 
         bool isMRU(int32_t lineId) {
             if(lineId == -1) return false;
             return array[lineId];
+        }
+
+        bool isMRUDirty() {
+            return MRUDirty;
         }
 };
 

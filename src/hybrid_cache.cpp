@@ -55,19 +55,33 @@ uint64_t HybridCache::access(MemReq& req) {
             }
         }
         #endif
+        if(lineId == -1) {
+            // if miss, bring data from DRAM incurring a write SRAM latency
+            respCycle += accWrLat;
+        } else {
+            if(isMRU) {
+                if (req.type == GETS || req.type == GETX) {
+                    // read hit on MRU
+                    respCycle += accLat;
+                } else {
+                    // write hit on MRU
+                    respCycle += accWrLat;
+                }
 
-        if (req.type == GETS || req.type == GETX) {
-            if (isMRU) {
-                respCycle += accLat;
             } else {
-                respCycle += accSlowLat;
-            }
-        }
-        else {
-            if (isMRU) {
-                respCycle += accWrLat;
-            } else {
-                respCycle += accSlowWrLat;
+                if (req.type == GETS || req.type == GETX) {
+                    // read hit on NMRU, we don't promote
+                    respCycle += accSlowLat;
+                } else {
+                    // write hit on NMRU
+                    if(rp->isMRUDirty()) {
+                        // if the MRU line is dirty, we don't promote
+                        respCycle += accSlowWrLat;
+                    } else {
+                        // if the MRU line is clean, we promote
+                        respCycle += accWrLat;
+                    }
+                }
             }
         }
 
