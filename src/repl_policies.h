@@ -55,7 +55,7 @@ class ReplPolicy : public GlobAlloc {
 
         virtual void initStats(AggregateStat* parent) {}
 
-        virtual bool isMRU(int32_t lineId) { return false; }
+        virtual bool isMRU(uint32_t lineId) { return true; }
         virtual bool isMRUDirty() { return false; }
 };
 
@@ -144,7 +144,7 @@ class LRUReplPolicy : public ReplPolicy {
         }
 };
 
-class NMRUReplPolicy : public LegacyReplPolicy {
+/*class NMRUReplPolicy : public LegacyReplPolicy {
     protected:
         bool* array;
         uint32_t numLines;
@@ -257,6 +257,88 @@ class NMRUReplPolicy : public LegacyReplPolicy {
 
         bool isMRUDirty() {
             return MRUDirty;
+        }
+};*/
+
+template <bool sharersAware>
+class NMRUReplPolicy : public ReplPolicy {
+    protected:
+        uint64_t timestamp; // incremented on each access
+        uint64_t* array;
+        uint32_t numLines;
+
+        uint32_t assoc;
+        uint32_t mruIdx;
+
+    public:
+        explicit NMRUReplPolicy(uint32_t _numLines, uint32_t _assoc) : timestamp(1), numLines(_numLines), assoc(_assoc){
+            array = gm_calloc<uint64_t>(numLines);
+        }
+
+        ~NMRUReplPolicy() {
+            gm_free(array);
+        }
+
+        void update(uint32_t id, const MemReq* req) {
+            uint32_t set = id / assoc;
+
+            mruIdx = -1;
+            uint64_t bestScore = (uint64_t)0;
+
+            for (uint32_t i = set*assoc; i < set*assoc + assoc; ++i) {
+                uint32_t s = score(i);
+                mruIdx = (s > bestScore)? i: mruIdx;
+                bestScore = MAX(s, bestScore);
+            }
+            if(mruIdx == (uint32_t)(-1)) {
+                mruIdx = id;
+                array[id] = timestamp++;
+                return;
+            }
+
+            if(mruIdx == id) {
+                // MRU hit
+                array[id] = timestamp++;
+            } else {
+                // NMRU hit
+                if(cc->isDirty(mruIdx)) {
+                    // dirty MRU line
+                    // array[id] = timestamp++;
+                } else {
+                    // clean MRU line
+                    array[id] = timestamp++;
+                }
+            }
+        }
+
+        void replaced(uint32_t id) {
+            array[id] = 0;
+        }
+
+        bool isMRU(uint32_t lineId) {
+            return mruIdx == lineId;
+        }
+
+        template <typename C> inline uint32_t rank(const MemReq* req, C cands) {
+            uint32_t bestCand = -1;
+            uint64_t bestScore = (uint64_t)-1L;
+            for (auto ci = cands.begin(); ci != cands.end(); ci.inc()) {
+                uint32_t s = score(*ci);
+                bestCand = (s < bestScore)? *ci : bestCand;
+                bestScore = MIN(s, bestScore);
+            }
+            return bestCand;
+        }
+
+        DECL_RANK_BINDINGS;
+
+    private:
+        inline uint64_t score(uint32_t id) { //higher is least evictable
+            //array[id] < timestamp always, so this prioritizes by:
+            // (1) valid (if not valid, it's 0)
+            // (2) sharers, and
+            // (3) timestamp
+            return (sharersAware? cc->numSharers(id) : 0)*timestamp + array[id]*cc->isValid(id);
         }
 };
 

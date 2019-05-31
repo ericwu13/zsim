@@ -167,7 +167,12 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     } else if (replType == "Rand") {
         rp = new RandReplPolicy(candidates);
     } else if (replType == "NMRU") {
-        rp = new NMRUReplPolicy(numLines, ways);
+        bool sharersAware = (replType == "NMRU") && !isTerminal;
+        if (sharersAware) {
+            rp = new NMRUReplPolicy<true>(numLines, ways);
+        } else {
+            rp = new NMRUReplPolicy<false>(numLines, ways);
+        }
     } else if (replType == "WayPart" || replType == "Vantage" || replType == "IdealLRUPart") {
         if (replType == "WayPart" && arrayType != "SetAssoc") panic("WayPart replacement requires SetAssoc array");
 

@@ -39,6 +39,16 @@ print "L2 Hits in the first bank",
 print l2_0_hits
 '''
 
+'''
+l3_hits = np.sum(dset[-1]['l3']['hGETS'] + dset[-1]['l3']['hGETX'])
+print "L3 Hits in all banks", 
+print l3_hits
+
+l3_misses = np.sum(dset[-1]['l3']['mGETS'] + dset[-1]['l3']['mGETXIM'] + dset[-1]['l3']['mGETXSM'])
+print "L3 Misses in all banks", 
+print l3_misses
+'''
+
 # Hits into all L2s
 l2_hits = np.sum(dset[-1]['l2']['hGETS'] + dset[-1]['l2']['hGETX'])
 print "L2 Hits in all banks", 
@@ -55,6 +65,11 @@ print l2_latency
 l1d_latency = np.sum(dset[-1]['l1d'][0]['latGETnl'])
 print "L1D Latency", 
 print l1d_latency
+
+l1i_latency = np.sum(dset[-1]['l1i'][0]['latGETnl'])
+print "L1I Latency", 
+print l1i_latency
+
 # Total number of instructions executed, counted by adding per-core counts
 # (you could also look at procInstrs)
 totalInstrs = np.sum(dset[-1]['simpleCore']['instrs'])
