@@ -49,6 +49,9 @@ class CacheArray : public GlobAlloc {
         virtual void postinsert(const Address lineAddr, const MemReq* req, uint32_t lineId) = 0;
 
         virtual void initStats(AggregateStat* parent) {}
+
+        virtual void getAddress(int32_t lineId, Address* wbLineAddr) {}
+        virtual void addressRM(int32_t lineId) {}
 };
 
 class ReplPolicy;
@@ -73,6 +76,9 @@ class SetAssocArray : public CacheArray {
         void postinsert(const Address lineAddr, const MemReq* req, uint32_t candidate);
 
         int32_t lookupMRU(const Address lineAddr);
+
+        void getAddress(int32_t lineId, Address* wbLineAddr) {*wbLineAddr = array[lineId];}
+        void addressRM(int32_t lineId) { array[lineId] = 0; }
 };
 
 /* The cache array that started this simulator :) */
@@ -108,6 +114,8 @@ class ZArray : public CacheArray {
         uint32_t getLastCandIdx() const {return lastCandIdx;}
 
         void initStats(AggregateStat* parentStat);
+
+        void getAddress(int32_t lineId, Address* wbLineAddr) {*wbLineAddr = array[lineId];}
 };
 
 // Simple wrapper classes and iterators for candidates in each case; simplifies replacement policy interface without sacrificing performance

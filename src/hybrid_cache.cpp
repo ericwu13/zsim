@@ -29,46 +29,55 @@
 #include "timing_event.h"
 #include "zsim.h"
 
-HybridCache::HybridCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accSlowLat, uint32_t _accWrLat, uint32_t _accSlowWrLat, uint32_t _invLat, const g_string& _name)
-    : Cache(_numLines, _cc, _array, _rp, _accLat, _accSlowLat, _accWrLat, _accSlowWrLat, _invLat, _name) {}
+HybridCache::HybridCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _accSlowLat, uint32_t _accWrLat, uint32_t _accSlowWrLat, uint32_t _invLat, const g_string& _name, bool _dirtyWb)
+    : Cache(_numLines, _cc, _array, _rp, _accLat, _accSlowLat, _accWrLat, _accSlowWrLat, _invLat, _name) {
+        dirtyWb = _dirtyWb;
+    }
 
 uint64_t HybridCache::access(MemReq& req) {
     uint64_t respCycle = req.cycle;
     bool skipAccess = cc->startAccess(req); //may need to skip access due to races (NOTE: may change req.type!)
     if (likely(!skipAccess)) {
+        // info("==================");
+        // info("Access Line Addr: 0x%lx", req.lineAddr);
         bool updateReplacement = (req.type == GETS) || (req.type == GETX);
 
-        int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement); // promote the line when hit
-        bool isMRU = rp->isMRU((uint32_t)lineId);
+        uint32_t mruIdx = rp->getMRU(req.lineAddr);
+        int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement); 
 
-        if(lineId == -1) {
-            // if miss, bring data from DRAM incurring a write SRAM latency
-            respCycle += accWrLat;
-        } else {
-            if(isMRU) {
-                if (req.type == GETS || req.type == GETX) {
-                    // read hit on MRU
-                    // info("MRU read hit")
-                    respCycle += accLat;
-                } else {
-                    // write hit on MRU
-                    // info("MRU write hit %d", accWrLat)
-                    respCycle += accWrLat;
-                }
+        bool isMRU = (int32_t)mruIdx == lineId || (int32_t)mruIdx == -1;
 
+        if(req.type == GETS || req.type == GETX) {
+            if(lineId == -1) {
+                respCycle += accLat;
+            }
+            else if(isMRU) {
+                // info("MRU hit")
+                respCycle += accLat;
             } else {
-                if (req.type == GETS || req.type == GETX) {
-                    // read hit on NMRU
-                    // info("NMRU read hit %d", accSlowLat)
-                    respCycle += accSlowLat;
-                } else {
-                    // info("NMRU write hit %d", accSlowWrLat)
-                    respCycle += accSlowWrLat;
+                respCycle += accSlowLat;
+                if(!cc->isDirty(mruIdx)) {
+                    /*uint32_t candidate = mruIdx;
+                    Address wbLineAddr;
+                    array->getAddress(candidate, &wbLineAddr);
+                    trace(Cache, "[%s] Evicting 0x%lx", name.c_str(), wbLineAddr);
+                    cc->processEviction(req, wbLineAddr, candidate, respCycle);*/
+                } else if(cc->isDirty(mruIdx) && dirtyWb) {
+                    // clean MRU, update NMRU to MRU
+                    // info("NMRU hit and clean MRU");
+                    uint32_t candidate = mruIdx;
+                    Address wbLineAddr;
+                    array->getAddress(candidate, &wbLineAddr);
+                    trace(Cache, "[%s] Evicting 0x%lx", name.c_str(), wbLineAddr);
+                    cc->processEviction(req, wbLineAddr, candidate, respCycle);
                 }
             }
+        } else {
+            respCycle += accWrLat;
         }
 
         if (lineId == -1 && cc->shouldAllocate(req)) {
+            // info("Cache Miss");
             //Make space for new line
             Address wbLineAddr;
             lineId = array->preinsert(req.lineAddr, &req, &wbLineAddr); //find the lineId to replace

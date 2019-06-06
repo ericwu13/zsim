@@ -60,6 +60,7 @@ class CC : public GlobAlloc {
         virtual uint32_t numSharers(uint32_t lineId) = 0;
         virtual bool isValid(uint32_t lineId) = 0;
         virtual bool isDirty(uint32_t lineId) = 0;
+        virtual void invLine(uint32_t lineId) = 0;
 };
 
 
@@ -170,6 +171,11 @@ class MESIBottomCC : public GlobAlloc {
         
         inline bool isDirty(uint32_t lineId) {
             return array[lineId] == M;
+        }
+
+        inline void invLine(uint32_t lineId) {
+            MESIState* state = &array[lineId];
+            * state = I;
         }
 
         //Could extend with isExclusive, isDirty, etc, but not needed for now.
@@ -412,6 +418,7 @@ class MESICC : public CC {
         uint32_t numSharers(uint32_t lineId) {return tcc->numSharers(lineId);}
         bool isValid(uint32_t lineId) {return bcc->isValid(lineId);}
         bool isDirty(uint32_t lineId) {return bcc->isDirty(lineId);}
+        void invLine(uint32_t lineId) {bcc->invLine(lineId);}
 };
 
 // Terminal CC, i.e., without children --- accepts GETS/X, but not PUTS/X
@@ -501,6 +508,7 @@ class MESITerminalCC : public CC {
         uint32_t numSharers(uint32_t lineId) {return 0;} //no sharers
         bool isValid(uint32_t lineId) {return bcc->isValid(lineId);}
         bool isDirty(uint32_t lineId) {return bcc->isDirty(lineId);}
+        void invLine(uint32_t lineId) {bcc->invLine(lineId);}
 };
 
 #endif  // COHERENCE_CTRLS_H_

@@ -1,5 +1,4 @@
-/** $lic$
- * Copyright (C) 2012-2015 by Massachusetts Institute of Technology
+/** $lic$ * Copyright (C) 2012-2015 by Massachusetts Institute of Technology
  * Copyright (C) 2010-2013 by The Board of Trustees of Stanford University
  *
  * This file is part of zsim.
@@ -55,7 +54,7 @@ class ReplPolicy : public GlobAlloc {
 
         virtual void initStats(AggregateStat* parent) {}
 
-        virtual bool isMRU(uint32_t lineId) { return true; }
+        virtual uint32_t getMRU(Address lineAddr) { return -1; }
         virtual bool isMRUDirty() { return false; }
 };
 
@@ -260,7 +259,7 @@ class LRUReplPolicy : public ReplPolicy {
         }
 };*/
 
-template <bool sharersAware>
+template <bool sharersAware, bool dirtyWb>
 class NMRUReplPolicy : public ReplPolicy {
     protected:
         uint64_t timestamp; // incremented on each access
@@ -268,11 +267,16 @@ class NMRUReplPolicy : public ReplPolicy {
         uint32_t numLines;
 
         uint32_t assoc;
+        uint32_t setMask;
         uint32_t mruIdx;
 
     public:
+
         explicit NMRUReplPolicy(uint32_t _numLines, uint32_t _assoc) : timestamp(1), numLines(_numLines), assoc(_assoc){
             array = gm_calloc<uint64_t>(numLines);
+            mruIdx = -1;
+            uint32_t numSets = numLines / assoc;
+            setMask = numSets - 1;
         }
 
         ~NMRUReplPolicy() {
@@ -280,43 +284,39 @@ class NMRUReplPolicy : public ReplPolicy {
         }
 
         void update(uint32_t id, const MemReq* req) {
-            uint32_t set = id / assoc;
-
-            mruIdx = -1;
-            uint64_t bestScore = (uint64_t)0;
-
-            for (uint32_t i = set*assoc; i < set*assoc + assoc; ++i) {
-                uint32_t s = score(i);
-                mruIdx = (s > bestScore)? i: mruIdx;
-                bestScore = MAX(s, bestScore);
-            }
+            // cold cahce, when there is no MRU
             if(mruIdx == (uint32_t)(-1)) {
-                mruIdx = id;
                 array[id] = timestamp++;
-                return;
-            }
-
-            if(mruIdx == id) {
+            } else if(mruIdx == id) {
                 // MRU hit
                 array[id] = timestamp++;
             } else {
-                // NMRU hit
-                if(cc->isDirty(mruIdx)) {
-                    // dirty MRU line
-                    // array[id] = timestamp++;
-                } else {
-                    // clean MRU line
+                if(!cc->isDirty(mruIdx)) {
+                    array[id] = timestamp++;
+                } else if(cc->isDirty(mruIdx) && dirtyWb){
+                    // invalidate current line, ready to be promoted to MRU position
+                    // cc->invLine(id);
+                    // array[id] = 0;
                     array[id] = timestamp++;
                 }
             }
         }
 
-        void replaced(uint32_t id) {
-            array[id] = 0;
+        uint32_t getMRU(Address lineAddr) {
+            uint32_t set = lineAddr & setMask;
+            uint32_t first = set*assoc;
+            mruIdx = -1;
+            uint64_t bestScore = (uint64_t)0;
+            for (uint32_t i = first; i < first + assoc; ++i) {
+                uint32_t s = score(i);
+                mruIdx = (s > bestScore)? i: mruIdx;
+                bestScore = MAX(s, bestScore);
+            }
+            return mruIdx;
         }
 
-        bool isMRU(uint32_t lineId) {
-            return mruIdx == lineId;
+        void replaced(uint32_t id) {
+            array[id] = 0;
         }
 
         template <typename C> inline uint32_t rank(const MemReq* req, C cands) {

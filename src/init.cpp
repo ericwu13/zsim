@@ -147,6 +147,9 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     string replType = config.get<const char*>(prefix + "repl.type", (arrayType == "IdealLRUPart")? "IdealLRUPart" : "LRU");
     ReplPolicy* rp = nullptr;
 
+    // Linus Version?
+    bool dirtyWb = config.get<bool>(prefix + "dirtyWb", false);
+
     if (replType == "LRU" || replType == "LRUNoSh") {
         bool sharersAware = (replType == "LRU") && !isTerminal;
         if (sharersAware) {
@@ -169,9 +172,15 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     } else if (replType == "NMRU") {
         bool sharersAware = (replType == "NMRU") && !isTerminal;
         if (sharersAware) {
-            rp = new NMRUReplPolicy<true>(numLines, ways);
+            if(dirtyWb)
+                rp = new NMRUReplPolicy<true, true>(numLines, ways);
+            else
+                rp = new NMRUReplPolicy<true, false>(numLines, ways);
         } else {
-            rp = new NMRUReplPolicy<false>(numLines, ways);
+            if(dirtyWb)
+                rp = new NMRUReplPolicy<false, true>(numLines, ways);
+            else
+                rp = new NMRUReplPolicy<false, false>(numLines, ways);
         }
     } else if (replType == "WayPart" || replType == "Vantage" || replType == "IdealLRUPart") {
         if (replType == "WayPart" && arrayType != "SetAssoc") panic("WayPart replacement requires SetAssoc array");
@@ -273,7 +282,8 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
 
     // Inclusion?
     bool nonInclusiveHack = config.get<bool>(prefix + "nonInclusiveHack", false);
-    if (nonInclusiveHack) assert(type == "Simple" && !isTerminal);
+    if (nonInclusiveHack) assert((type == "Simple" || type == "Hybrid") && !isTerminal);
+
 
     // Finally, build the cache
     Cache* cache;
@@ -288,7 +298,7 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
         if (type == "Simple") {
             cache = new Cache(numLines, cc, array, rp, accLat, accLat, accWrLat, accWrLat, invLat, name);
         } else if (type == "Hybrid") {
-            cache = new HybridCache(numLines, cc, array, rp, accLat, accSlowLat, accWrLat, accSlowWrLat, invLat, name);
+            cache = new HybridCache(numLines, cc, array, rp, accLat, accSlowLat, accWrLat, accSlowWrLat, invLat, name, dirtyWb);
         } else if (type == "Timing") {
             uint32_t mshrs = config.get<uint32_t>(prefix + "mshrs", 16);
             uint32_t tagLat = config.get<uint32_t>(prefix + "tagLat", 5);
