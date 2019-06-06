@@ -51,34 +51,29 @@ print l3_misses
 
 # Hits into all L2s
 l2_hits = np.sum(dset[-1]['l2']['hGETS'] + dset[-1]['l2']['hGETX'])
-print "L2 Hits in all banks", 
-print l2_hits
+print "L2 Hits    : ", 
+print "{:,} read({:,}) + write({:,})".format(l2_hits, np.sum(dset[-1]['l2']['hGETS']), np.sum(dset[-1]['l2']['hGETX']))
 
 l2_misses = np.sum(dset[-1]['l2']['mGETS'] + dset[-1]['l2']['mGETXIM'] + dset[-1]['l2']['mGETXSM'])
-print "L2 Misses in all banks", 
-print l2_misses
+print "L2 Misses  : ", 
+print "{:,} read({:,}) + write({:,})".format(l2_misses, np.sum(dset[-1]['l2']['mGETS']), np.sum(dset[-1]['l2']['mGETXIM'] + dset[-1]['l2']['mGETXSM']))
 
-l2_latency = np.sum(dset[-1]['l2']['latGETnl'])
-print "L2 Latency in all banks", 
-print l2_latency
+# l2_latency = np.sum(dset[-1]['l2']['latGETnl'])
+# print "L2 Latency ", 
+# print l2_latency
 
 l1d_latency = np.sum(dset[-1]['l1d'][0]['latGETnl'])
-print "L1D Latency", 
-print l1d_latency
-
-l1i_latency = np.sum(dset[-1]['l1i'][0]['latGETnl'])
-print "L1I Latency", 
-print l1i_latency
-
+print "L1D Lat.   : ", 
+print "{:,}".format(l1d_latency)
 # Total number of instructions executed, counted by adding per-core counts
 # (you could also look at procInstrs)
-totalInstrs = np.sum(dset[-1]['simpleCore']['instrs'])
-print "Total Instructon Counts: ",
-print totalInstrs
+# totalInstrs = np.sum(dset[-1]['simpleCore']['instrs'])
+# print "Total Instructon Counts: ",
+# print totalInstrs
 
 totalCycle = np.sum(dset[-1]['simpleCore']['cycles'])
-print "Total Cycle Counts: ",
-print totalCycle
+print "Cycle Cnts : ",
+print "{:,}".format(totalCycle)
 
 # You can also focus on one sample, or index over multiple steps, e.g.,
 lastSample = dset[-1]
