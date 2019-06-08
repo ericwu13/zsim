@@ -103,6 +103,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
             break;
         case GETS:
             if (*state == I) {
+                // read hit on a invalid line
                 uint32_t parentId = getParentId(lineAddr);
                 MemReq req = {lineAddr, GETS, selfId, state, cycle, &ccLock, *state, srcId, flags};
                 uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;

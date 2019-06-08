@@ -294,9 +294,6 @@ class NMRUReplPolicy : public ReplPolicy {
                 if(!cc->isDirty(mruIdx)) {
                     array[id] = timestamp++;
                 } else if(cc->isDirty(mruIdx) && dirtyWb){
-                    // invalidate current line, ready to be promoted to MRU position
-                    // cc->invLine(id);
-                    // array[id] = 0;
                     array[id] = timestamp++;
                 }
             }

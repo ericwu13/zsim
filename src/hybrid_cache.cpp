@@ -50,21 +50,11 @@ uint64_t HybridCache::access(MemReq& req) {
         if(req.type == GETS || req.type == GETX) {
             if(lineId == -1) {
                 respCycle += accLat;
-            }
-            else if(isMRU) {
-                // info("MRU hit")
+            } else if(isMRU) {
                 respCycle += accLat;
             } else {
                 respCycle += accSlowLat;
-                if(!cc->isDirty(mruIdx)) {
-                    /*uint32_t candidate = mruIdx;
-                    Address wbLineAddr;
-                    array->getAddress(candidate, &wbLineAddr);
-                    trace(Cache, "[%s] Evicting 0x%lx", name.c_str(), wbLineAddr);
-                    cc->processEviction(req, wbLineAddr, candidate, respCycle);*/
-                } else if(cc->isDirty(mruIdx) && dirtyWb) {
-                    // clean MRU, update NMRU to MRU
-                    // info("NMRU hit and clean MRU");
+                if(cc->isDirty(mruIdx) && dirtyWb) {
                     uint32_t candidate = mruIdx;
                     Address wbLineAddr;
                     array->getAddress(candidate, &wbLineAddr);
@@ -73,7 +63,11 @@ uint64_t HybridCache::access(MemReq& req) {
                 }
             }
         } else {
-            respCycle += accWrLat;
+            if(isMRU || lineId == -1) {
+                respCycle += accWrLat;
+            } else {
+                respCycle += accSlowWrLat;
+            }
         }
 
         if (lineId == -1 && cc->shouldAllocate(req)) {
