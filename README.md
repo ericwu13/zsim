@@ -13,6 +13,17 @@ zsim is organized to scale well (almost linearly) with simulated core count.
 You can find more details about zsim in our ISCA 2013 paper:
 http://people.csail.mit.edu/sanchez/papers/2013.zsim.isca.pdf.
 
+Hybrid Cache Configuration
+--------------------------
+
+Hybrid Cache has two types of read/write access latency, and this repo enables you to simulate this behavior
+
+1. please use `tests/simple_hybrid.cfg` to simluate hybrid cache in L3
+
+2. change `dirtyWb` to decide whether you evict dirty MRU line when NMRU hit
+
+3. change `type` to simple and `repl.type` to LRU to change L3 cache to normal cache
+
 
 License & Copyright
 -------------------
