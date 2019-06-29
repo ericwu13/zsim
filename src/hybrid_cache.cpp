@@ -54,20 +54,16 @@ uint64_t HybridCache::access(MemReq& req) {
                 respCycle += accLat;
             } else {
                 respCycle += accSlowLat;
-                if(cc->isDirty(mruIdx) && dirtyWb) {
+                /*if(cc->isDirty(mruIdx) && dirtyWb) {
                     uint32_t candidate = mruIdx;
                     Address wbLineAddr;
                     array->getAddress(candidate, &wbLineAddr);
                     trace(Cache, "[%s] Evicting 0x%lx", name.c_str(), wbLineAddr);
                     cc->processEviction(req, wbLineAddr, candidate, respCycle);
-                }
+                }*/
             }
         } else {
-            if(isMRU || lineId == -1) {
-                respCycle += accWrLat;
-            } else {
-                respCycle += accSlowWrLat;
-            }
+            respCycle += accWrLat;
         }
 
         if (lineId == -1 && cc->shouldAllocate(req)) {

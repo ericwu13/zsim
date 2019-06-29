@@ -13,7 +13,6 @@
 import h5py # presents HDF5 files as numpy arrays
 import numpy as np
 import sys
-import pprint
 
 # Open stats file
 f = h5py.File(sys.argv[1], 'r')
@@ -55,3 +54,7 @@ print "{:,}".format(l2_latency)
 totalCycle = np.sum(dset[-1]['simpleCore']['cycles'])
 print "Cycle Cnts : ",
 print "{:,}".format(totalCycle)
+
+totalInst = np.sum(dset[-1]['simpleCore']['instrs'])
+print "Instr Cnts : ",
+print "{:,}".format(totalInst)

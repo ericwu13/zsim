@@ -269,6 +269,7 @@ class NMRUReplPolicy : public ReplPolicy {
         uint32_t assoc;
         uint32_t setMask;
         uint32_t mruIdx;
+        bool miss;
 
     public:
 
@@ -277,6 +278,7 @@ class NMRUReplPolicy : public ReplPolicy {
             mruIdx = -1;
             uint32_t numSets = numLines / assoc;
             setMask = numSets - 1;
+            miss = false;
         }
 
         ~NMRUReplPolicy() {
@@ -284,6 +286,12 @@ class NMRUReplPolicy : public ReplPolicy {
         }
 
         void update(uint32_t id, const MemReq* req) {
+            if(miss) {
+                array[id] = timestamp++;
+                miss = false;
+                return;
+            }
+
             // cold cahce, when there is no MRU
             if(mruIdx == (uint32_t)(-1)) {
                 array[id] = timestamp++;
@@ -291,11 +299,13 @@ class NMRUReplPolicy : public ReplPolicy {
                 // MRU hit
                 array[id] = timestamp++;
             } else {
+                array[id] = array[mruIdx] - 1;
+                /*array[id] = timestamp++;
                 if(!cc->isDirty(mruIdx)) {
                     array[id] = timestamp++;
                 } else if(cc->isDirty(mruIdx) && dirtyWb){
                     array[id] = timestamp++;
-                }
+                }*/
             }
         }
 
@@ -313,6 +323,7 @@ class NMRUReplPolicy : public ReplPolicy {
         }
 
         void replaced(uint32_t id) {
+            miss = true;
             array[id] = 0;
         }
 
