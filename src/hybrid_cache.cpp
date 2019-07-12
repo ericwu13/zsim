@@ -52,6 +52,7 @@ uint64_t HybridCache::access(MemReq& req) {
                 respCycle += accLat;
             } else if(isMRU) {
                 respCycle += accLat;
+                cc->incMRUHit();
             } else {
                 respCycle += accSlowLat;
                 /*if(cc->isDirty(mruIdx) && dirtyWb) {

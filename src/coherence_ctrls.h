@@ -61,6 +61,8 @@ class CC : public GlobAlloc {
         virtual bool isValid(uint32_t lineId) = 0;
         virtual bool isDirty(uint32_t lineId) = 0;
         virtual void invLine(uint32_t lineId) = 0;
+
+        virtual void incMRUHit() {};
 };
 
 
@@ -92,6 +94,7 @@ class MESIBottomCC : public GlobAlloc {
         Counter profGETSHit, profGETSMiss, profGETXHit, profGETXMissIM /*from invalid*/, profGETXMissSM /*from S, i.e. upgrade misses*/;
         Counter profPUTS, profPUTX /*received from downstream*/;
         Counter profINV, profINVX, profFWD /*received from upstream*/;
+
         //Counter profWBIncl, profWBCoh /* writebacks due to inclusion or coherence, received from downstream, does not include PUTS */;
         // TODO: Measuring writebacks is messy, do if needed
         Counter profGETNextLevelLat, profGETNetLat;
@@ -110,6 +113,8 @@ class MESIBottomCC : public GlobAlloc {
             }
             futex_init(&ccLock);
         }
+
+        Counter profMRUHit;
 
         void init(const g_vector<MemObject*>& _parents, Network* network, const char* name);
 
@@ -132,6 +137,7 @@ class MESIBottomCC : public GlobAlloc {
             profGETNextLevelLat.init("latGETnl", "GET request latency on next level");
             profGETNetLat.init("latGETnet", "GET request latency on network to next level");
 
+            profMRUHit.init("hMRU", "MRU hits");
             parentStat->append(&profGETSHit);
             parentStat->append(&profGETXHit);
             parentStat->append(&profGETSMiss);
@@ -144,6 +150,7 @@ class MESIBottomCC : public GlobAlloc {
             parentStat->append(&profFWD);
             parentStat->append(&profGETNextLevelLat);
             parentStat->append(&profGETNetLat);
+            parentStat->append(&profMRUHit);
         }
 
         uint64_t processEviction(Address wbLineAddr, uint32_t lineId, bool lowerLevelWriteback, uint64_t cycle, uint32_t srcId);
@@ -419,6 +426,8 @@ class MESICC : public CC {
         bool isValid(uint32_t lineId) {return bcc->isValid(lineId);}
         bool isDirty(uint32_t lineId) {return bcc->isDirty(lineId);}
         void invLine(uint32_t lineId) {bcc->invLine(lineId);}
+
+        void incMRUHit() {bcc->profMRUHit.inc();}
 };
 
 // Terminal CC, i.e., without children --- accepts GETS/X, but not PUTS/X

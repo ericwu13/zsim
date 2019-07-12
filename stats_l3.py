@@ -13,6 +13,8 @@
 import h5py # presents HDF5 files as numpy arrays
 import numpy as np
 import sys
+print ""
+print "{} {} {}".format("{:=<20}".format(""), sys.argv[1], "{:=>20}".format(""))
 
 # Open stats file
 f = h5py.File(sys.argv[1], 'r')
@@ -27,24 +29,52 @@ dset = f["stats"]["root"]
 
 # Phase count at end of simulation
 endPhase = dset[-1]['phase']
+width = 15
+width_2 = 30
 print "Phase Counts",
 print endPhase
 
 # Hits into all L3s
-l3_hits = np.sum(dset[-1]['l3']['hGETS'] + dset[-1]['l3']['hGETX'])
-print "L3 Hits    : ", 
-print "{:,} read({:,}) + write({:,})".format(l3_hits, np.sum(dset[-1]['l3']['hGETS']), np.sum(dset[-1]['l3']['hGETX']))
-
 l3_misses = np.sum(dset[-1]['l3']['mGETS'] + dset[-1]['l3']['mGETXIM'] + dset[-1]['l3']['mGETXSM'])
-print "L3 Misses  : ", 
-print "{:,} read({:,}) + write({:,})".format(l3_misses, np.sum(dset[-1]['l3']['mGETS']), np.sum(dset[-1]['l3']['mGETXIM'] + dset[-1]['l3']['mGETXSM']))
+l3_hits = np.sum(dset[-1]['l3']['hGETS'] + dset[-1]['l3']['hGETX'])
+l3_access = l3_hits + l3_misses
+l3_MRUhits = np.sum(dset[-1]['l3']['hMRU'])
+
+print "{: <{}}:".format("L3 Total Accesses", width_2),
+print "{: >{}}".format("{:,}".format(l3_access), width)
+
+print "{: <{}}:".format("  - L3 Misses", width_2),
+print "{: >{}}".format("{:,}".format(l3_misses), width)
+
+print "{: <{}}:".format("  - L3 Hits", width_2),
+# print "{:,} read({:,}) + write({:,})".format(l3_hits, np.sum(dset[-1]['l3']['hGETS']), np.sum(dset[-1]['l3']['hGETX']))
+
+print "{: >{}}".format("{:,}".format(l3_hits), width)
+
+print "{: <{}}:".format("     - L3 MRU Hits", width_2),
+# print "{:,} read({:,}) + write({:,})".format(l3_hits, np.sum(dset[-1]['l3']['hGETS']), np.sum(dset[-1]['l3']['hGETX']))
+print "{: >{}}".format("{:,}".format(l3_MRUhits), width)
+
+print "{: <{}}:".format("     * L3 MRU Hit Rate", width_2),
+print "{: >{}}".format("{:.2%}".format(l3_MRUhits/ float(l3_hits)), width)
+
+print "{: <{}}:".format("  * L3 Miss Rate", width_2),
+print "{: >{}}".format("{:.2%}".format(l3_misses / float(l3_access)), width)
+
+
+
+
+
+
+
+
 
 # print "L2 Latency ", 
 # print l2_latency
 
 l2_latency = np.sum(dset[-1]['l2']['latGETnl'])
-print "L2 Lat.   : ",
-print "{:,}".format(l2_latency)
+print "{: <{}}:".format("L2 Latency", width_2),
+print "{: >{}}".format("{:,}".format(l2_latency), width)
 # Total number of instructions executed, counted by adding per-core counts
 # (you could also look at procInstrs)
 # totalInstrs = np.sum(dset[-1]['simpleCore']['instrs'])
@@ -52,9 +82,19 @@ print "{:,}".format(l2_latency)
 # print totalInstrs
 
 totalCycle = np.sum(dset[-1]['simpleCore']['cycles'])
-print "Cycle Cnts : ",
-print "{:,}".format(totalCycle)
-
 totalInst = np.sum(dset[-1]['simpleCore']['instrs'])
-print "Instr Cnts : ",
-print "{:,}".format(totalInst)
+
+print "{: <{}}:".format("Instruction Counts", width_2),
+print "{: >{}}".format("{:,}".format(totalInst), width)
+
+print "{: <{}}:".format("Cycle Counts", width_2),
+print "{: >{}}".format("{:,}".format(totalCycle), width)
+
+print "{: <{}}:".format("  * IPC", width_2),
+print "{: >{}}".format("{:.5f}".format(totalInst / float(totalCycle)), width)
+
+
+
+print "{:=>{}}".format("", 21+21+len(sys.argv[1]))
+print "",
+
